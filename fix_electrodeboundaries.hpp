@@ -18,8 +18,8 @@ FixStyle(electrodeboundaries,FixElectrodeBoundaries)
 
 #else
 
-#ifndef LMP_FIX_GCMC_H
-#define LMP_FIX_GCMC_H
+#ifndef LMP_FIX_ELECTRODEBOUNDARIES_H
+#define LMP_FIX_ELECTRODEBOUNDARIES_H
 
 #include "fix.h"
 
@@ -30,6 +30,30 @@ class FixElectrodeBoundaries : public Fix {
   FixElectrodeBoundaries(class LAMMPS *, int, char **);
   ~FixElectrodeBoundaries();
   int setmask();
+  void init();
+  void setup_pre_force(int);
+
+  double memory_usage();
+  void grow_arrays(int);
+  void copy_arrays(int, int);
+  void set_arrays(int);
+
+
+ protected: 
+  double pxvalue,pyvalue,pzvalue,nxvalue,nyvalue,nzvalue,dist;
+  int varflag,iregion,itype;
+  char *pxstr,*pystr,*pzstr,*nxstr,*nystr,*nzstr,*diststr;
+  char *idregion, *scalestr;
+  int pxvar,pyvar,pzvar,nxvar,nyvar,nzvar,distvar; 
+  int pxstyle,pystyle,pzstyle,nxstyle,nystyle,nzstyle,diststyle;
+
+
+  double foriginal[3],foriginal_all[3];
+  int force_flag;
+  int nlevels_respa,ilevel_respa;
+
+  int maxatom;
+  double **sforce;
 
 };
 }

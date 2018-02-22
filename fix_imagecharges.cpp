@@ -115,8 +115,8 @@ FixImageCharges::FixImageCharges(LAMMPS *lmp, int narg, char **arg) :
 	  }
 
 
-	  // optional arguments
-	  iregion = -1;
+	// optional arguments
+	iregion = -1;
   	idregion = NULL;
   	scale = 1.0;
 

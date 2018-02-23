@@ -31,7 +31,7 @@ class FixElectrodeBoundaries : public Fix {
   ~FixElectrodeBoundaries();
   int setmask();
   void init();
-  void setup_pre_force(int);
+  void pre_exchange();
 
   double memory_usage();
   void grow_arrays(int);

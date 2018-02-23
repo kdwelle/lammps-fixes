@@ -140,7 +140,76 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
 
 }
 
+FixElectrodeBoundaries::~FixElectrodeBoundaries(){
+  // destructor -- free us pointer arrays
 
+  delete [] pxstr;
+  delete [] pystr;
+  delete [] pzstr;
+  delete [] nxstr;
+  delete [] nystr;
+  delete [] nzstr;
+  delete [] vstr;
+  delete [] dvstr;
+  delete [] idregion;
 
+  atom->delete_callback(id,0);
 
+}
+
+int FixElectrodeBoundaries::setmask(){
+  int mask = 0;
+  mask |= PRE_EXCHANGE;
+  return mask;
+}
+
+void FixElectrodeBoundaries::init(){
+  // initial setup -- not sure what should go here
+}
+
+void FixElectrodeBoundaries::pre_exchange(){
+  // for some number of atoms
+  // pick an ion
+}
+
+/* ----------------------------------------------------------------------
+   compute particle's interaction energy with the rest of the system
+------------------------------------------------------------------------- */
+
+double FixElectrodeBoundaries::energy(int i, int itype, tagint imolecule, double *coord)
+{
+  double delx,dely,delz,rsq;
+
+  double **x = atom->x;
+  int *type = atom->type;
+  tagint *molecule = atom->molecule;
+  int nall = atom->nlocal + atom->nghost;
+  pair = force->pair;
+  cutsq = force->pair->cutsq;
+
+  double fpair = 0.0;
+  double factor_coul = 1.0;
+  double factor_lj = 1.0;
+
+  double total_energy = 0.0;
+
+  for (int j = 0; j < nall; j++) {
+
+    if (i == j) continue;
+    if (mode == MOLECULE)
+      if (imolecule == molecule[j]) continue;
+
+    delx = coord[0] - x[j][0];
+    dely = coord[1] - x[j][1];
+    delz = coord[2] - x[j][2];
+    rsq = delx*delx + dely*dely + delz*delz;
+    int jtype = type[j];
+
+    if (rsq < cutsq[itype][jtype])
+      total_energy +=
+        pair->single(i,j,itype,jtype,rsq,factor_coul,factor_lj,fpair);
+  }
+
+  return total_energy;
+}
 

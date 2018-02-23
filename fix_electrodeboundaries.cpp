@@ -30,8 +30,9 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   Fix(lmp, narg, arg),
 	pxstr(NULL), pystr(NULL), pzstr(NULL), 
 	nxstr(NULL), nystr(NULL), nzstr(NULL), 
+	idregion(NULL), diststr(NULL){
 
-	idregion(NULL), scalestr(NULL){
+  if (narg < 12) error->all(FLERR,"Illegal fix electrodeboundaries command -- not enough arguments");
 
 	// first three arguments define a point on the plane
 	if (strstr(arg[3],"v_") == arg[3]) {   // if starts with the string v_
@@ -98,40 +99,48 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
     distvalue = force->numeric(FLERR,arg[9]); 
     diststyle = CONSTANT;
   }
+  // Then left voltage and voltage difference
+  if (strstr(arg[10],"v_") == arg[10]) { 
+    int n = strlen(&arg[10][2]) + 1;
+    vstr = new char[n];
+    strcpy(diststr,&arg[10][2]);
+  } else {
+    vvalue = force->numeric(FLERR,arg[10]); 
+    vstyle = CONSTANT;
+  }
+  if (strstr(arg[11],"v_") == arg[11]) { 
+    int n = strlen(&arg[11][2]) + 1;
+    dvstr = new char[n];
+    strcpy(diststr,&arg[11][2]);
+  } else {
+    dvvalue = force->numeric(FLERR,arg[11]); 
+    dvstyle = CONSTANT;
+  }
 
+	// optional arguments
+	iregion = -1;
+	idregion = NULL;
+	scale = 1.0;
 
-	// // optional arguments
-	// iregion = -1;
- //  	idregion = NULL;
- //  	scale = 1.0;
-
- //  	int iarg = 10;	//start after madatory arguments
- //  	while (iarg < narg) {
-
- //    if (strcmp(arg[iarg],"region") == 0) { //keyword = region
- //      if (iarg+2 > narg) error->all(FLERR,"Illegal fix imagecharges command"); //check to make sure there is a next argument
- //      iregion = domain->find_region(arg[iarg+1]);
- //      if (iregion == -1)
- //        error->all(FLERR,"Region ID for fix imagescharges does not exist");
- //      int n = strlen(arg[iarg+1]) + 1;
- //      idregion = new char[n];
- //      strcpy(idregion,arg[iarg+1]);
- //      iarg += 2;
-
- //    } else if (strcmp(arg[iarg],"scale") == 0) { //keyword = scale
- //    	if (iarg+2 > narg) error->all(FLERR,"Illegal fix imagecharges command"); //check to make sure there is a next argument
- //    	if (strstr(arg[iarg+1],"v_") == arg[iarg+1]) { //variable
- //    		int n = strlen(&arg[iarg+1][2]) + 1;
-	//     	scalestr = new char[n];
-	//     	strcpy(scalestr,&arg[iarg+1][2]);
-	// 		} else {
-	// 			scale = force->numeric(FLERR,arg[iarg+1]);
-	// 			scalestyle = CONSTANT;
-	// 		}
-	// 		iarg += 2;
+	int iarg = 12;	//start after madatory arguments
+	while (iarg < narg) {
+    if (strcmp(arg[iarg],"region") == 0) { //keyword = region
+      if (iarg+2 > narg) error->all(FLERR,"Illegal fix imagecharges command"); //check to make sure there is a next argument
+      iregion = domain->find_region(arg[iarg+1]);
+      if (iregion == -1)
+        error->all(FLERR,"Region ID for fix imagescharges does not exist");
+      int n = strlen(arg[iarg+1]) + 1;
+      idregion = new char[n];
+      strcpy(idregion,arg[iarg+1]);
+      iarg += 2;
     
- //    } else error->all(FLERR,"Illegal fix imagecharges command"); // not a recognized keyword
- //  }
-	// atom->add_callback(0);
+    } else error->all(FLERR,"Illegal fix imagecharges command"); // not a recognized keyword
+  }
+	atom->add_callback(0);
 
 }
+
+
+
+
+

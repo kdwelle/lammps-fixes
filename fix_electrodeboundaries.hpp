@@ -40,12 +40,12 @@ class FixElectrodeBoundaries : public Fix {
 
 
  protected: 
-  double pxvalue,pyvalue,pzvalue,nxvalue,nyvalue,nzvalue,dist;
+  double pxvalue,pyvalue,pzvalue,nxvalue,nyvalue,nzvalue,distvalue,vvalue,dvvalue;
   int varflag,iregion,itype;
-  char *pxstr,*pystr,*pzstr,*nxstr,*nystr,*nzstr,*diststr;
+  char *pxstr,*pystr,*pzstr,*nxstr,*nystr,*nzstr,*diststr,*vstr,*dvstr;
   char *idregion, *scalestr;
   int pxvar,pyvar,pzvar,nxvar,nyvar,nzvar,distvar; 
-  int pxstyle,pystyle,pzstyle,nxstyle,nystyle,nzstyle,diststyle;
+  int pxstyle,pystyle,pzstyle,nxstyle,nystyle,nzstyle,diststyle,vstyle,dvstyle;
 
 
   double foriginal[3],foriginal_all[3];

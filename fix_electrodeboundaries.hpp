@@ -33,6 +33,10 @@ class FixElectrodeBoundaries : public Fix {
   void init();
   void pre_exchange();
 
+  //internal subroutines
+  void attempt_charge_transfer();
+  int is_particle(double, double, double);
+
   double memory_usage();
   void grow_arrays(int);
   void copy_arrays(int, int);
@@ -47,8 +51,8 @@ class FixElectrodeBoundaries : public Fix {
   int pxvar,pyvar,pzvar,nxvar,nyvar,nzvar,distvar; 
   int pxstyle,pystyle,pzstyle,nxstyle,nystyle,nzstyle,diststyle,vstyle,dvstyle;
 
+  double dx,zcut;
 
-  double foriginal[3],foriginal_all[3];
   int force_flag;
   int nlevels_respa,ilevel_respa;
 

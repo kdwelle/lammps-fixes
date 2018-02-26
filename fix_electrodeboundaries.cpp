@@ -32,109 +32,46 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
 	nxstr(NULL), nystr(NULL), nzstr(NULL), 
 	idregion(NULL), diststr(NULL){
 
-  if (narg < 12) error->all(FLERR,"Illegal fix electrodeboundaries command -- not enough arguments");
+  dx = 0.5; //plus/minus search for ion in vicinity
+  zCut = 2.0; //distance from electrode to check for electrochem
+
+  if (narg < 13) error->all(FLERR,"Illegal fix electrodeboundaries command -- not enough arguments");
 
 	// first three arguments define a point on the plane
-	if (strstr(arg[3],"v_") == arg[3]) {   // if starts with the string v_
-    int n = strlen(&arg[3][2]) + 1;      // length of variable name + 1 (calls strlen on a pointer to the third character in the string)
-    pxstr = new char[n];                 // allocate enough space for variable
-    strcpy(pxstr,&arg[3][2]);            // copy varible name to class
-	} else {
-    pxvalue = force->numeric(FLERR,arg[3]); // else just convert input to a number and store
-    pxstyle = CONSTANT;
-	}
-
-	if (strstr(arg[4],"v_") == arg[4]) { 
-    int n = strlen(&arg[4][2]) + 1;    
-    pystr = new char[n];                
-    strcpy(pystr,&arg[4][2]);           
-  } else {
-    pyvalue = force->numeric(FLERR,arg[4]); 
-    pystyle = CONSTANT;
-  }
-	
-	if (strstr(arg[5],"v_") == arg[5]) { 
-    int n = strlen(&arg[5][2]) + 1;    
-    pzstr = new char[n];                
-    strcpy(pzstr,&arg[5][2]);           
-  } else {
-    pzvalue = force->numeric(FLERR,arg[5]); 
-    pzstyle = CONSTANT;
-  }
+  pxvalue = force->numeric(FLERR,arg[3]); // else just convert input to a number and store
+  pyvalue = force->numeric(FLERR,arg[4]); 
+  pzvalue = force->numeric(FLERR,arg[5]); 
 
   // next three arguments define a vector normal to the plane
-  if (strstr(arg[6],"v_") == arg[6]) { 
-    int n = strlen(&arg[6][2]) + 1;    
-    nxstr = new char[n];                
-    strcpy(nxstr,&arg[6][2]);           
-  } else {
-    nxvalue = force->numeric(FLERR,arg[6]); 
-    nxstyle = CONSTANT;
-  }
-
-  if (strstr(arg[7],"v_") == arg[7]) { 
-    int n = strlen(&arg[7][2]) + 1;    
-    nystr = new char[n];                
-    strcpy(nystr,&arg[7][2]);           
-  } else {
-    nyvalue = force->numeric(FLERR,arg[7]); 
-    nystyle = CONSTANT;
-  }
-
-  if (strstr(arg[8],"v_") == arg[8]) { 
-    int n = strlen(&arg[8][2]) + 1;
-    nzstr = new char[n];
-    strcpy(nzstr,&arg[8][2]);
-  } else {
-    nzvalue = force->numeric(FLERR,arg[8]); 
-    nzstyle = CONSTANT;
-  }
+  nxvalue = force->numeric(FLERR,arg[6]); 
+  nyvalue = force->numeric(FLERR,arg[7]); 
+  nzvalue = force->numeric(FLERR,arg[8]); 
 
   // Next argument is a distance between electrodes 
-  if (strstr(arg[9],"v_") == arg[9]) { 
-    int n = strlen(&arg[9][2]) + 1;
-    nzstr = new char[n];
-    strcpy(diststr,&arg[9][2]);
-  } else {
-    distvalue = force->numeric(FLERR,arg[9]); 
-    diststyle = CONSTANT;
-  }
-  // Then left voltage and voltage difference
-  if (strstr(arg[10],"v_") == arg[10]) { 
-    int n = strlen(&arg[10][2]) + 1;
-    vstr = new char[n];
-    strcpy(diststr,&arg[10][2]);
-  } else {
-    vvalue = force->numeric(FLERR,arg[10]); 
-    vstyle = CONSTANT;
-  }
-  if (strstr(arg[11],"v_") == arg[11]) { 
-    int n = strlen(&arg[11][2]) + 1;
-    dvstr = new char[n];
-    strcpy(diststr,&arg[11][2]);
-  } else {
-    dvvalue = force->numeric(FLERR,arg[11]); 
-    dvstyle = CONSTANT;
-  }
+  distvalue = force->numeric(FLERR,arg[9]); 
+  // Then voltage@defined plane and voltage difference between electrodes
+  vvalue = force->numeric(FLERR,arg[10]); 
+  dvvalue = force->numeric(FLERR,arg[11]); 
+  active_type = force->inumeric(FLERR,arg[12]); //type of atom that is electrochemically active
 
 	// optional arguments
 	iregion = -1;
 	idregion = NULL;
 	scale = 1.0;
 
-	int iarg = 12;	//start after madatory arguments
+	int iarg = 13;	//start after madatory arguments
 	while (iarg < narg) {
     if (strcmp(arg[iarg],"region") == 0) { //keyword = region
-      if (iarg+2 > narg) error->all(FLERR,"Illegal fix imagecharges command"); //check to make sure there is a next argument
+      if (iarg+2 > narg) error->all(FLERR,"Illegal fix electrodeboundaries command"); //check to make sure there is a next argument
       iregion = domain->find_region(arg[iarg+1]);
       if (iregion == -1)
-        error->all(FLERR,"Region ID for fix imagescharges does not exist");
+        error->all(FLERR,"Region ID for fix electrodeboundaries does not exist");
       int n = strlen(arg[iarg+1]) + 1;
       idregion = new char[n];
       strcpy(idregion,arg[iarg+1]);
       iarg += 2;
     
-    } else error->all(FLERR,"Illegal fix imagecharges command"); // not a recognized keyword
+    } else error->all(FLERR,"Illegal fix electrodeboundaries command"); // not a recognized keyword
   }
 	atom->add_callback(0);
 
@@ -168,9 +105,66 @@ void FixElectrodeBoundaries::init(){
 }
 
 void FixElectrodeBoundaries::pre_exchange(){
-  // for some number of atoms
-  // pick an ion
+  // for some number of attempts
+  // pick an x(uniform),y(uniform),z(uniform to some cutoff) position
+  // Check if ion is within dx --> If so attempt reduction
+  // --> if not, attempt oxidation
+
+
+
+  for (int i=0; i<)
 }
+
+void FixGCMC::attempt_atomic_insertion_full(double *coord){
+
+  ninsertion_attempts += 1.0;
+  double energy_before = energy_stored;
+
+  // add atom
+  atom->avec->create_atom(ngcmc_type,coord);
+  int m = atom->nlocal - 1;
+
+  // add to groups
+  // optionally add to type-based groups
+
+  atom->mask[m] = groupbitall;
+  for (int igroup = 0; igroup < ngrouptypes; igroup++) {
+    if (
+      _type == grouptypes[igroup])
+atom->mask[m] |= grouptypebits[igroup];
+  }
+
+  atom->v[m][0] = random_unequal->gaussian()*sigma;
+  atom->v[m][1] = random_unequal->gaussian()*sigma;
+  atom->v[m][2] = random_unequal->gaussian()*sigma;
+  if (charge_flag) atom->q[m] = charge;
+  modify->create_attribute(m);
+
+
+  atom->natoms++;
+  if (atom->tag_enable) {
+    atom->tag_extend();
+    if (atom->map_style) atom->map_init();
+  }
+  atom->nghost = 0;
+
+  if (force->kspace) force->kspace->qsum_qsq();
+  double energy_after = energy_full();
+
+  if (random_equal->uniform() <
+      zz*volume*exp(beta*(energy_before - energy_after))/(ngas+1)) {
+
+    ninsertion_successes += 1.0;
+    energy_stored = energy_after;
+  } else {
+    atom->natoms--;
+    if (proc_flag) atom->nlocal--;
+    if (force->kspace) force->kspace->qsum_qsq();
+    energy_stored = energy_before;
+  }
+  update_gas_atoms_list();
+}
+
 
 /* ----------------------------------------------------------------------
    compute particle's interaction energy with the rest of the system

@@ -28,51 +28,49 @@ using namespace FixConst;
 
 FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg) :
   Fix(lmp, narg, arg),
-	pxstr(NULL), pystr(NULL), pzstr(NULL), 
-	nxstr(NULL), nystr(NULL), nzstr(NULL), 
-	idregion(NULL), diststr(NULL){
+	idregion(NULL),{
 
-  dx = 0.5; //plus/minus search for ion in vicinity
-  zCut = 2.0; //distance from electrode to check for electrochem
+  dr = 0.5; //plus/minus search for ion in vicinity
+  xcut = 2.0; //distance from electrode to check for electrochem
+  ncycles = 100; //number of attempts per timestep
 
-  if (narg < 13) error->all(FLERR,"Illegal fix electrodeboundaries command -- not enough arguments");
+  if (narg < 8) error->all(FLERR,"Illegal fix electrodeboundaries command -- not enough arguments");
 
-	// first three arguments define a point on the plane
-  pxvalue = force->numeric(FLERR,arg[3]); // else just convert input to a number and store
-  pyvalue = force->numeric(FLERR,arg[4]); 
-  pzvalue = force->numeric(FLERR,arg[5]); 
-
-  // next three arguments define a vector normal to the plane
-  nxvalue = force->numeric(FLERR,arg[6]); 
-  nyvalue = force->numeric(FLERR,arg[7]); 
-  nzvalue = force->numeric(FLERR,arg[8]); 
-
+  // electrodes have to lie along the x-axis
   // Next argument is a distance between electrodes 
-  distvalue = force->numeric(FLERR,arg[9]); 
+  xlo = force->numeric(FLERR,arg[3]); 
+  dist = force->numeric(FLERR,arg[4]); 
   // Then voltage@defined plane and voltage difference between electrodes
-  vvalue = force->numeric(FLERR,arg[10]); 
-  dvvalue = force->numeric(FLERR,arg[11]); 
-  active_type = force->inumeric(FLERR,arg[12]); //type of atom that is electrochemically active
+  v0 = force->numeric(FLERR,arg[5]); 
+  dv = force->numeric(FLERR,arg[6]); 
+  etype = force->inumeric(FLERR,arg[7]); //type of atom that is electrochemically active
 
 	// optional arguments
 	iregion = -1;
 	idregion = NULL;
 	scale = 1.0;
 
-	int iarg = 13;	//start after madatory arguments
+	int iarg = 8;	//start after madatory arguments
 	while (iarg < narg) {
     if (strcmp(arg[iarg],"region") == 0) { //keyword = region
-      if (iarg+2 > narg) error->all(FLERR,"Illegal fix electrodeboundaries command"); //check to make sure there is a next argument
-      iregion = domain->find_region(arg[iarg+1]);
-      if (iregion == -1)
-        error->all(FLERR,"Region ID for fix electrodeboundaries does not exist");
-      int n = strlen(arg[iarg+1]) + 1;
-      idregion = new char[n];
-      strcpy(idregion,arg[iarg+1]);
-      iarg += 2;
-    
+        error->all(FLERR,"fix electrodeboundaries does not support regions");
+    iarg += 2;
     } else error->all(FLERR,"Illegal fix electrodeboundaries command"); // not a recognized keyword
   }
+
+  // zero out counters
+  leftOx=0;
+  leftOxAttempts=0;
+  leftRed=0;
+  leftRedAttempts=0;
+  rightOx=0;
+  rightOxAttempts=0;
+  rightRed=0;
+  rightRedAttempts=0;
+
+  // random number generator, same for all procs
+  random_equal = new RanPark(lmp,seed);
+
 	atom->add_callback(0);
 
 }
@@ -80,14 +78,6 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
 FixElectrodeBoundaries::~FixElectrodeBoundaries(){
   // destructor -- free us pointer arrays
 
-  delete [] pxstr;
-  delete [] pystr;
-  delete [] pzstr;
-  delete [] nxstr;
-  delete [] nystr;
-  delete [] nzstr;
-  delete [] vstr;
-  delete [] dvstr;
   delete [] idregion;
 
   atom->delete_callback(id,0);
@@ -110,9 +100,15 @@ void FixElectrodeBoundaries::pre_exchange(){
   // Check if ion is within dx --> If so attempt reduction
   // --> if not, attempt oxidation
 
+  double coords[3];
+
+  for (int i=0; i<ncycle; ++i){
+    coord[0] = region_xlo + random_equal->uniform() * (region_xhi-region_xlo);
+    coord[1] = region_ylo + random_equal->uniform() * (region_yhi-region_ylo);
+    coord[2] = region_zlo + random_equal->uniform() * (region_zhi-region_zlo);
 
 
-  for (int i=0; i<)
+  }
 }
 
 void FixGCMC::attempt_atomic_insertion_full(double *coord){

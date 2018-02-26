@@ -35,7 +35,8 @@ class FixElectrodeBoundaries : public Fix {
 
   //internal subroutines
   void attempt_charge_transfer();
-  int is_particle(double, double, double);
+  int is_particle(double*);
+  void attempt_atomic_insertion_full(double*)
 
   double memory_usage();
   void grow_arrays(int);
@@ -44,7 +45,8 @@ class FixElectrodeBoundaries : public Fix {
 
 
  protected: 
-  double xlo,dist,v0,dv;
+  double xlo, xhi, dist,v0,dv;
+  double ylo,yhi,zlo,zhi;
   int varflag,iregion,etype,ncycles;
   int leftOx, leftOxAttempts
   int leftRed, leftRedAttempts;

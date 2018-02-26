@@ -40,6 +40,7 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   // Next argument is a distance between electrodes 
   xlo = force->numeric(FLERR,arg[3]); 
   dist = force->numeric(FLERR,arg[4]); 
+  xhi = xlo + dist;
   // Then voltage@defined plane and voltage difference between electrodes
   v0 = force->numeric(FLERR,arg[5]); 
   dv = force->numeric(FLERR,arg[6]); 
@@ -92,6 +93,13 @@ int FixElectrodeBoundaries::setmask(){
 
 void FixElectrodeBoundaries::init(){
   // initial setup -- not sure what should go here
+
+  //check that active ion type exists
+  int *type = atom->type;
+
+    if (etype <= 0 || etype > atom->ntypes)
+      error->all(FLERR,"Invalid atom type in fix electrodeboundaries command");
+
 }
 
 void FixElectrodeBoundaries::pre_exchange(){
@@ -101,17 +109,37 @@ void FixElectrodeBoundaries::pre_exchange(){
   // --> if not, attempt oxidation
 
   double coords[3];
+  ylo = domain->boxlo[1];
+  yhi = domain->boxhi[1];
+  zlo = domain->boxlo[2];
+  zhi = domain->boxhi[2];
 
   for (int i=0; i<ncycle; ++i){
-    coord[0] = region_xlo + random_equal->uniform() * (region_xhi-region_xlo);
-    coord[1] = region_ylo + random_equal->uniform() * (region_yhi-region_ylo);
-    coord[2] = region_zlo + random_equal->uniform() * (region_zhi-region_zlo);
+    coord[0] = random_equal->uniform() * (xcut*2); //only want to sample near electrodes
+    coord[1] = ylo + random_equal->uniform() * (yhi-ylo);
+    coord[2] = zlo + random_equal->uniform() * (zhi-zlo);
+
+    //translate coord[0] into x position
+    if (coord[0] < xcut){ //left side
+      coord[0] = coord[0] + xlo;
+
+    }else{ //right side
+      coord[0] = xhi - coord[0];
+    }
+
+    if (is_particle(coord)){
+      //attempt reduction
+
+    }else{
+      //attempt oxidation
+      
+    }
 
 
   }
 }
 
-void FixGCMC::attempt_atomic_insertion_full(double *coord){
+void FixElectrodeBoundaries::attempt_atomic_insertion_full(double *coord){
 
   ninsertion_attempts += 1.0;
   double energy_before = energy_stored;

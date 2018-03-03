@@ -31,10 +31,12 @@ class FixImageCharges : public Fix {
   int setmask();
   virtual void init();
   void setup_pre_force(int);
+  void pre_force(int);
+  void post_force(int);
 
   double memory_usage();
   void grow_arrays(int);
-  void copy_arrays(int, int);
+  void copy_arrays(int, int,int);
   void set_arrays(int);
 
 
@@ -46,11 +48,15 @@ class FixImageCharges : public Fix {
   int pxvar,pyvar,pzvar,nxvar,nyvar,nzvar,scalevar; 
   int pxstyle,pystyle,pzstyle,nxstyle,nystyle,nzstyle,scalestyle;
   int *imagei;
+  double *imageid;
 
 
   double foriginal[3],foriginal_all[3];
   int force_flag;
-  int nlevels_respa,ilevel_respa;
+  int nlevels_respa,ilevel_respa; 
+
+
+  
 
   int maxatom;
   double **sforce;

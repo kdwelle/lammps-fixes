@@ -33,11 +33,6 @@ class FixElectrodeBoundaries : public Fix {
   void init();
   void pre_exchange();
 
-  //internal subroutines
-  void attempt_charge_transfer();
-  int is_particle(double*);
-  void attempt_atomic_insertion_full(double*)
-
   double memory_usage();
   void grow_arrays(int);
   void copy_arrays(int, int);
@@ -45,10 +40,10 @@ class FixElectrodeBoundaries : public Fix {
 
 
  protected: 
-  double xlo, xhi, dist,v0,dv;
+  double xlo,xhi,dist,v0,dv,sigma,charge;
   double ylo,yhi,zlo,zhi;
   int varflag,iregion,etype,ncycles;
-  int leftOx, leftOxAttempts
+  int leftOx, leftOxAttempts;
   int leftRed, leftRedAttempts;
   int rightOx, rightOxAttempts;
   int rightRed, rightRedAttempts;
@@ -63,6 +58,14 @@ class FixElectrodeBoundaries : public Fix {
   double **sforce;
 
   class RanPark *random_equal;
+
+  //internal subroutines
+  int is_particle(double*);
+  void attempt_oxidation(double*, int);
+  void attempt_reduction(double*, int);
+  float get_transfer_probability(float, int);
+  double energy_full();
+
 
 
 };

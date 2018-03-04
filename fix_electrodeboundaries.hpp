@@ -42,6 +42,7 @@ class FixElectrodeBoundaries : public Fix {
  protected: 
   double xlo,xhi,dist,v0,dv,sigma,charge;
   double ylo,yhi,zlo,zhi;
+  double energy_stored;
   int varflag,iregion,etype,ncycles;
   int leftOx, leftOxAttempts;
   int leftRed, leftRedAttempts;
@@ -62,7 +63,7 @@ class FixElectrodeBoundaries : public Fix {
   //internal subroutines
   int is_particle(double*);
   void attempt_oxidation(double*, int);
-  void attempt_reduction(double*, int);
+  void attempt_reduction(int, int);
   float get_transfer_probability(float, int);
   double energy_full();
 

@@ -101,8 +101,11 @@ void FixElectrodeBoundaries::init(){
   //check that active ion type exists
   int *type = atom->type;
 
-    if (etype <= 0 || etype > atom->ntypes)
-      error->all(FLERR,"Invalid atom type in fix electrodeboundaries command");
+  if (etype <= 0 || etype > atom->ntypes){
+    error->all(FLERR,"Invalid atom type in fix electrodeboundaries command");
+  }
+  // set energy
+  energy_stored = energy_full();
 
 }
 
@@ -137,7 +140,7 @@ void FixElectrodeBoundaries::pre_exchange(){
     int index = is_particle(coord);
     if (index == -1){
       //attempt reduction
-      attempt_reduction(coord, side);
+      attempt_reduction(index, side);
 
     }else{
       //attempt oxidation
@@ -152,7 +155,9 @@ int is_particle(double *coords){
   // checks to see if there is a particle within dr of coords
   // returns the index of the atom or -1 if not found
   double **x = atom->x;
+  int *type = atom->type;
   int nlocal = atom->nlocal;
+  int *mask = atom->mask;
 
   xmin=coords[0]-dr;
   xmax=coorder[0]+dr;
@@ -163,13 +168,17 @@ int is_particle(double *coords){
 
   //probably going to be very slow -- oh well let's try it
   for (int i=0; i<nlocal; ++i){
-    if (x[i][0] > xmin){
-      if (x[i][0] < xmax){
-        if (x[i][1] > ymin){
-          if (x[i][1] < ymax){
-            if (x[i][2] > zmin){
-              if (x[i][2] < zmax){
-                return i;
+    if(mask[i] & groupbit){
+      if (tpye[i]==etype){   
+        if (x[i][0] > xmin){
+          if (x[i][0] < xmax){
+            if (x[i][1] > ymin){
+              if (x[i][1] < ymax){
+                if (x[i][2] > zmin){
+                  if (x[i][2] < zmax){
+                    return i;
+                  }
+                }
               }
             }
           }
@@ -181,11 +190,7 @@ int is_particle(double *coords){
 }
 
 void FixElectrodeBoundaries::attempt_oxidation(double *coord, side){
-  if side{
-    rightOxAttempts++;
-  }else{
-    leftOxAttempts++;
-  }
+  side? rightOxAttempts++ : leftOxAttempts++;
 
   double energy_before = energy_stored;
 
@@ -222,16 +227,47 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, side){
   // metropolis condition -- greater than becaude get_transfer probability return p(x) for reduction, oxidation = 1-P(x)
     energy_stored = energy_after;
     (side)? rightOx++ : leftOx++;
-  }else{
+  }else{ //not accepted
     atom->natoms--;
     if (proc_flag) atom->nlocal--;
     if (force->kspace) force->kspace->qsum_qsq();
     energy_stored = energy_before;
   }
-  update_gas_atoms_list();
+
 }
 
-void FixElectrodeBoundaries::attempt_reduction(double *coords){
+void FixElectrodeBoundaries::attempt_reduction(int i, int side){
+  double q_tmp;
+  const int q_flag = atom->q_flag;
+
+  side? rightRedAttempts++ : leftRedAttempts++;
+  double energy_before = energy_stored;
+
+  int tmpmask;
+  if (i >= 0) {
+    tmpmask = atom->mask[i];
+    atom->mask[i] = exclusion_group_bit;
+    if (q_flag) {
+      q_tmp = atom->q[i];
+      atom->q[i] = 0.0;
+    }
+  }
+  if (force->kspace) force->kspace->qsum_qsq();
+  double energy_after = energy_full();
+
+  if (random_equal->uniform() < get_transfer_probability(energy_after-energy_before,side)) {
+    atom->avec->copy(atom->nlocal-1,i,1);
+    atom->nlocal--;
+    atom->natoms--;
+    if (atom->map_style) atom->map_init();
+    side? rightRed++ : leftRed++;
+    energy_stored = energy_after;
+  } else { //not accepted
+    atom->mask[i] = tmpmask;
+    if (q_flag) atom->q[i] = q_tmp;
+    if (force->kspace) force->kspace->qsum_qsq();
+    energy_stored = energy_before;
+  }
 
 }
 
@@ -250,54 +286,15 @@ float FixElectrodeBoundaries::get_transfer_probability(float dE, int side){
 
 
 /* ----------------------------------------------------------------------
-   compute particle's interaction energy with the rest of the system
+   compute total system energy incuding fixes
 ------------------------------------------------------------------------- */
-
-double FixElectrodeBoundaries::energy(int i, int itype, tagint imolecule, double *coord)
-{
-  double delx,dely,delz,rsq;
-
-  double **x = atom->x;
-  int *type = atom->type;
-  tagint *molecule = atom->molecule;
-  int nall = atom->nlocal + atom->nghost;
-  pair = force->pair;
-  cutsq = force->pair->cutsq;
-
-  double fpair = 0.0;
-  double factor_coul = 1.0;
-  double factor_lj = 1.0;
-
-  double total_energy = 0.0;
-
-  for (int j = 0; j < nall; j++) {
-
-    if (i == j) continue;
-    if (mode == MOLECULE)
-      if (imolecule == molecule[j]) continue;
-
-    delx = coord[0] - x[j][0];
-    dely = coord[1] - x[j][1];
-    delz = coord[2] - x[j][2];
-    rsq = delx*delx + dely*dely + delz*delz;
-    int jtype = type[j];
-
-    if (rsq < cutsq[itype][jtype])
-      total_energy +=
-        pair->single(i,j,itype,jtype,rsq,factor_coul,factor_lj,fpair);
-  }
-
-  return total_energy;
-}
 
 double ElectrodeBoundaries::energy_full()
 {
-  if (triclinic) domain->x2lamda(atom->nlocal);
   domain->pbc();
   comm->exchange();
   atom->nghost = 0;
   comm->borders();
-  if (triclinic) domain->lamda2x(atom->nlocal+atom->nghost);
   if (modify->n_pre_neighbor) modify->pre_neighbor();
   neighbor->build();
   int eflag = 1;
@@ -310,9 +307,7 @@ double ElectrodeBoundaries::energy_full()
   if (nbytes) memset(&atom->f[0][0],0,3*nbytes);
 
   if (modify->n_pre_force) modify->pre_force(vflag);
-
   if (force->pair) force->pair->compute(eflag,vflag);
-
   if (force->kspace) force->kspace->compute(eflag,vflag);
 
   // unlike Verlet, not performing a reverse_comm() or forces here

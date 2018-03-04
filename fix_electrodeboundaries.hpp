@@ -10,7 +10,9 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-
+/* ----------------------------------------------------------------------
+   Contributing author: Kaitlyn Dwelle (MIT)
+------------------------------------------------------------------------- */
 
 #ifdef FIX_CLASS
 
@@ -33,17 +35,19 @@ class FixElectrodeBoundaries : public Fix {
   void init();
   void pre_exchange();
 
-  double memory_usage();
-  void grow_arrays(int);
-  void copy_arrays(int, int);
-  void set_arrays(int);
+  // double memory_usage();
+  // void grow_arrays(int);
+  // void copy_arrays(int, int);
+  // void set_arrays(int);
 
 
  protected: 
   double xlo,xhi,dist,v0,dv,sigma,charge;
   double ylo,yhi,zlo,zhi;
+  bool charge_flag;
   double energy_stored;
-  int varflag,iregion,etype,ncycles;
+  int exclusion_group, exclusion_group_bit;
+  int varflag,iregion,etype,ncycles,seed;
   int leftOx, leftOxAttempts;
   int leftRed, leftRedAttempts;
   int rightOx, rightOxAttempts;
@@ -59,6 +63,7 @@ class FixElectrodeBoundaries : public Fix {
   double **sforce;
 
   class RanPark *random_equal;
+  class Compute *c_pe;
 
   //internal subroutines
   int is_particle(double*);

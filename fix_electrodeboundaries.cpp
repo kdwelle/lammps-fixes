@@ -16,8 +16,28 @@
 ------------------------------------------------------------------------- */
 
 #include <math.h>
-#include "fix_electrodeboundaries.h"
+#include <stdlib.h>
+
+#include "fix_electrodeboundaries.hpp"
 #include "fix.h"
+
+#include "atom.h"
+#include "atom_vec.h"
+#include "comm.h"
+#include "compute.h"
+#include "domain.h"
+#include "error.h"
+#include "force.h"
+#include "group.h"
+#include "kspace.h"
+#include "modify.h"
+#include "neighbor.h"
+#include "pair.h"
+#include "random_park.h"
+#include "update.h"
+
+
+
 
 
 using namespace std;
@@ -28,12 +48,14 @@ using namespace FixConst;
 
 FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg) :
   Fix(lmp, narg, arg),
-	idregion(NULL),{
+	idregion(NULL){
 
   dr = 0.5; //plus/minus search for ion in vicinity
   xcut = 2.0; //distance from electrode to check for electrochem
   ncycles = 100; //number of attempts per timestep
   charge = 1;
+  charge_flag = true;
+
 
   if (narg < 8) error->all(FLERR,"Illegal fix electrodeboundaries command -- not enough arguments");
 
@@ -46,16 +68,16 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   v0 = force->numeric(FLERR,arg[5]); 
   dv = force->numeric(FLERR,arg[6]); 
   etype = force->inumeric(FLERR,arg[7]); //type of atom that is electrochemically active
+  seed = force->inumeric(FLERR,arg[8]);
 
+  if (seed <= 0) error->all(FLERR,"Illegal fix electrodeboundaries command -- seed cannot be zero or negative");
   
-
 
 	// optional arguments
 	iregion = -1;
 	idregion = NULL;
-	scale = 1.0;
 
-	int iarg = 8;	//start after madatory arguments
+	int iarg = 9;	//start after madatory arguments
 	while (iarg < narg) {
     if (strcmp(arg[iarg],"region") == 0) { //keyword = region
         error->all(FLERR,"fix electrodeboundaries does not support regions");
@@ -104,6 +126,43 @@ void FixElectrodeBoundaries::init(){
   if (etype <= 0 || etype > atom->ntypes){
     error->all(FLERR,"Invalid atom type in fix electrodeboundaries command");
   }
+
+  // create a new group for interaction exclusions
+  // used for attempted atom or molecule deletions
+  if (!exclusion_group_bit) {
+    char **group_arg = new char*[4];
+
+    // create unique group name for atoms to be excluded
+    int len = strlen(id) + 30;
+    group_arg[0] = new char[len];
+    sprintf(group_arg[0],"FixGCMC:gcmc_exclusion_group:%s",id);
+    group_arg[1] = (char *) "subtract";
+    group_arg[2] = (char *) "all";
+    group_arg[3] = (char *) "all";
+    group->assign(4,group_arg);
+    exclusion_group = group->find(group_arg[0]);
+    if (exclusion_group == -1)
+      error->all(FLERR,"Could not find fix gcmc exclusion group ID");
+    exclusion_group_bit = group->bitmask[exclusion_group];
+
+    // neighbor list exclusion setup
+    // turn off interactions between group all and the exclusion group
+    int narg = 4;
+    char **arg = new char*[narg];;
+    arg[0] = (char *) "exclude";
+    arg[1] = (char *) "group";
+    arg[2] = group_arg[0];
+    arg[3] = (char *) "all";
+    neighbor->modify_params(narg,arg);
+    delete [] group_arg[0];
+    delete [] group_arg;
+    delete [] arg;
+  }
+
+  char *id_pe = (char *) "thermo_pe";
+  int ipe = modify->find_compute(id_pe);
+  c_pe = modify->compute[ipe];
+
   // set energy
   energy_stored = energy_full();
 
@@ -121,37 +180,37 @@ void FixElectrodeBoundaries::pre_exchange(){
   zlo = domain->boxlo[2];
   zhi = domain->boxhi[2];
 
-  for (int i=0; i<ncycle; ++i){
-    coord[0] = random_equal->uniform() * (xcut*2); //only want to sample near electrodes
-    coord[1] = ylo + random_equal->uniform() * (yhi-ylo);
-    coord[2] = zlo + random_equal->uniform() * (zhi-zlo);
+  for (int i=0; i<ncycles; ++i){
+    coords[0] = random_equal->uniform() * (xcut*2); //only want to sample near electrodes
+    coords[1] = ylo + random_equal->uniform() * (yhi-ylo);
+    coords[2] = zlo + random_equal->uniform() * (zhi-zlo);
 
     //translate coord[0] into x position
-    int side
-    if (coord[0] < xcut){ //left side
-      coord[0] = coord[0] + xlo;
+    int side;
+    if (coords[0] < xcut){ //left side
+      coords[0] = coords[0] + xlo;
       side = 0;
 
     }else{ //right side
-      coord[0] = xhi - coord[0];
+      coords[0] = xhi - coords[0];
       side =1;
     }
 
-    int index = is_particle(coord);
+    int index = is_particle(coords);
     if (index == -1){
       //attempt reduction
       attempt_reduction(index, side);
 
     }else{
       //attempt oxidation
-      attempt_oxidation(coord, side);
+      attempt_oxidation(coords, side);
 
     }
 
   }
 }
 
-int is_particle(double *coords){
+int FixElectrodeBoundaries::is_particle(double *coords){
   // checks to see if there is a particle within dr of coords
   // returns the index of the atom or -1 if not found
   double **x = atom->x;
@@ -159,17 +218,17 @@ int is_particle(double *coords){
   int nlocal = atom->nlocal;
   int *mask = atom->mask;
 
-  xmin=coords[0]-dr;
-  xmax=coorder[0]+dr;
-  ymin=coords[1]-dr;
-  ymax=coords[1]+dr;
-  zmin=coords[2]-dr;
-  zmax=coords[2]+dr;
+  float xmin=coords[0]-dr;
+  float xmax=coords[0]+dr;
+  float ymin=coords[1]-dr;
+  float ymax=coords[1]+dr;
+  float zmin=coords[2]-dr;
+  float zmax=coords[2]+dr;
 
   //probably going to be very slow -- oh well let's try it
   for (int i=0; i<nlocal; ++i){
     if(mask[i] & groupbit){
-      if (tpye[i]==etype){   
+      if (type[i]==etype){   
         if (x[i][0] > xmin){
           if (x[i][0] < xmax){
             if (x[i][1] > ymin){
@@ -189,7 +248,9 @@ int is_particle(double *coords){
   return -1;
 }
 
-void FixElectrodeBoundaries::attempt_oxidation(double *coord, side){
+void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
+  
+
   side? rightOxAttempts++ : leftOxAttempts++;
 
   double energy_before = energy_stored;
@@ -201,15 +262,11 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, side){
   // add to groups
   // optionally add to type-based groups
 
-  atom->mask[m] = groupbitall;
-  for (int igroup = 0; igroup < ngrouptypes; igroup++) {
-    if (type == grouptypes[igroup])
-    atom->mask[m] |= grouptypebits[igroup];
-  }
+  atom->mask[m] = groupbit;
 
-  atom->v[m][0] = random_unequal->gaussian()*sigma;
-  atom->v[m][1] = random_unequal->gaussian()*sigma;
-  atom->v[m][2] = random_unequal->gaussian()*sigma;
+  atom->v[m][0] = random_equal->gaussian()*sigma;
+  atom->v[m][1] = random_equal->gaussian()*sigma;
+  atom->v[m][2] = random_equal->gaussian()*sigma;
   if (charge_flag) atom->q[m] = charge;
   modify->create_attribute(m); //what does this do?
 
@@ -229,7 +286,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, side){
     (side)? rightOx++ : leftOx++;
   }else{ //not accepted
     atom->natoms--;
-    if (proc_flag) atom->nlocal--;
+    atom->nlocal--;
     if (force->kspace) force->kspace->qsum_qsq();
     energy_stored = energy_before;
   }
@@ -289,14 +346,14 @@ float FixElectrodeBoundaries::get_transfer_probability(float dE, int side){
    compute total system energy incuding fixes
 ------------------------------------------------------------------------- */
 
-double ElectrodeBoundaries::energy_full()
+double FixElectrodeBoundaries::energy_full()
 {
   domain->pbc();
   comm->exchange();
   atom->nghost = 0;
   comm->borders();
   if (modify->n_pre_neighbor) modify->pre_neighbor();
-  neighbor->build();
+  neighbor->build(1);
   int eflag = 1;
   int vflag = 0;
 

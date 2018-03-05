@@ -18,7 +18,7 @@
 #include <math.h>
 #include <stdlib.h>
 
-#include "fix_electrodeboundaries.hpp"
+#include "fix_electrodeboundaries.hp"
 #include "fix.h"
 
 #include "atom.h"

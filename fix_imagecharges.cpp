@@ -344,8 +344,7 @@ void FixImageCharges::pre_force(int vflag){
 
   bool toDelete = false;
   int dlist[nlocal]; //list to use as a mask for atoms that need to be deleted
-
-
+  int imList[nlocal];
 
   // update region if necessary
 
@@ -358,58 +357,59 @@ void FixImageCharges::pre_force(int vflag){
   if (varflag == CONSTANT) {
     for (int i = 0; i < nlocal; i++){
       if (mask[i] & groupbit) {
-        if (region && !region->match(x[i][0],x[i][1],x[i][2])){
-          // check to see if there's an existing image charge to be deleted
-          if (imagei[i] >= 0) {
-              toDelete = true;
-              dlist[imagei[i]] = 1;
-              nadded--; //got rid of an atom so keep accounting constant
-              imagei[i] = -2;
-              imageid[i] = -2;
-          }
-          continue;
-        }
+        // if (region && !region->match(x[i][0],x[i][1],x[i][2])){
+        //   // check to see if there's an existing image charge to be deleted
+        //   if (imagei[i] >= 0) {
+        //       toDelete = true;
+        //       dlist[imagei[i]] = 1;
+        //       nadded--; //got rid of an atom so keep accounting constant
+        //       imagei[i] = -2;
+        //       imageid[i] = -2;
+        //   }
+        //   continue;
+        // }
         // check to see if an image charge already exists
         int j = imagei[i];
-        //check to see if this is an image charge itself
+
         if(j == -1){ // this is an image charge, will get taken care of later or deleted
-          dlist[i] = !dlist[i];
+          imList[i] = !imList[i];
           seenCount++;
-          continue;
-        }
+        }else{
+          // get new position -- transform coordinates across plane
+          double nnorm = sqrt(nxvalue*nxvalue + nyvalue*nyvalue + nzvalue*nzvalue);
+          double prefactor = 2*(nxvalue/nnorm*x[i][0] + nyvalue/nnorm*x[i][1] + nzvalue/nnorm*x[i][2]);
+          double delta = 2*(nxvalue/nnorm*pxvalue + nyvalue/nnorm*pyvalue + nzvalue/nnorm*pzvalue);
+          double r[3];
+          r[0] = x[i][0] - (prefactor-delta)*nxvalue;
+          r[1] = x[i][1] - (prefactor-delta)*nyvalue;
+          r[2] = x[i][2] - (prefactor-delta)*nzvalue;
 
-        // get new position -- transform coordinates across plane
-        double nnorm = sqrt(nxvalue*nxvalue + nyvalue*nyvalue + nzvalue*nzvalue);
-        double prefactor = 2*(nxvalue/nnorm*x[i][0] + nyvalue/nnorm*x[i][1] + nzvalue/nnorm*x[i][2]);
-        double delta = 2*(nxvalue/nnorm*pxvalue + nyvalue/nnorm*pyvalue + nzvalue/nnorm*pzvalue);
-        double r[3];
-        r[0] = x[i][0] - (prefactor-delta)*nxvalue;
-        r[1] = x[i][1] - (prefactor-delta)*nyvalue;
-        r[2] = x[i][2] - (prefactor-delta)*nzvalue;
+        
+          if(j == -2 || j==0 || j >= nlocal){ //used to not be in region or is new atom
+            // probably won't fail even if j was supposed to be zero
+            j=atomIndex;
 
-        // new image at coordinates
-        if (j == -2 || j==0){ //used to not be in region or is new atom
-          // probably won't fail even if j was supposed to be zero
-          j=atomIndex;
+            fprintf(screen,"%s %d %s %d %s", "New atom ", i, " gets image ", j, "\n");
+            atomIndex++;
+            nadded++;
+            atom->avec->create_atom(itype,r); //add a new atom
+          
+          }else{
+            // mark that we updated/saw this image
+            imList[j] = !imList[j];
+            reqCount++;
+            
+            // update image coordinates
+            for (int k=0; k<3; ++k){
+              x[j][k] = r[k];
+            }
+          }
+          atom->q[j] = -1*scale*q[i]; //update charge
           imagei[i] = j;
           imageid[i] = j;
-          atomIndex++;
-          nadded++;
-          atom->avec->create_atom(itype,r); //add a new atom
-        }else{
-          // mark that we updated/saw this image
-          dlist[j] = !dlist[j];
-          reqCount++;
-          // update image coordinates
-          for (int k=0; k<3; ++k){
-            x[j][k] = r[k];
-          }
+          imagei[j] = -1;
+          imageid[j] = -1;
         }
-        atom->q[j] = -1*scale*q[i]; //update charge
-        imagei[i] = j;
-        imageid[i] = j;
-        imagei[j] = -1;
-        imageid[j] = -1;
       }
     }
     // } else { TODO add the atom and equal style interpretations
@@ -417,17 +417,24 @@ void FixImageCharges::pre_force(int vflag){
 
   // deal with the deleteList
   if (seenCount > reqCount){
+    fprintf(screen,"%s", "difference in: ");
+    for (int i=0; i<nlocal; i++){
+      if (imList[i]) fprintf(screen,"%d %s", i, ", ");
+    }
     toDelete = true;
+    fprintf(screen,"%s", "\n");
   }
+
   if (toDelete){
     int i = 0;
     while (i<nlocal){
       if (dlist[i]){
-          atom -> avec -> copy(nlocal-1, i, 1);
-          dlist[i] = dlist[nlocal-1];
+        atom -> avec -> copy(nlocal-1, i, 1);
+        dlist[i] = dlist[nlocal-1];
         nlocal--;
       } else i++;
     }
+    
   }
 
   if(nadded){
@@ -441,10 +448,6 @@ void FixImageCharges::pre_force(int vflag){
       atom->map_set();
     }
   }
-  //free up some memory
-  delete[] imgSeen;
-  delete[] imgReq;
-
 }
 
 void FixImageCharges::post_force(int vflag){

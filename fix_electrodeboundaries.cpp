@@ -198,7 +198,7 @@ void FixElectrodeBoundaries::pre_exchange(){
     int index = is_particle(coords);
     if (index > -1){
       //attempt reduction
-      attempt_reduction(index, side);
+      // attempt_reduction(index, side);
 
     }else{
       //attempt oxidation
@@ -278,13 +278,28 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
   if (force->kspace) force->kspace->qsum_qsq();
   double energy_after = energy_full();
 
-  if (random_equal->uniform() > get_transfer_probability(energy_after-energy_before,side) ){
-  // metropolis condition -- greater than becaude get_transfer probability return p(x) for reduction, oxidation = 1-P(x)
+  double de = energy_after-energy_before;
+  double prob = get_transfer_probability(de,side);
+  fprintf(screen, "%s %f %s %f %s", "energy is ", de, " and prob is ",prob, "\n");
+  if (random_equal->uniform() > prob ){
+  // metropolis condition -- greater than because get_transfer probability return p(x) for reduction, oxidation = 1-P(x)
     energy_stored = energy_after;
     (side)? rightOx++ : leftOx++;
   }else{ //not accepted
+    int nlocal = atom->nlocal;
+    // fprintf(screen, "%s %d %s %d %s", "not accepted, m is ", m, " nlocal is ",nlocal, "\n");
+    
+    while (m < atom->nlocal-1){
+      atom->natoms--;
+      atom->nlocal--;
+    }
+
+    // fprintf(screen, "%s %d %s %d %s", "after while loop, m is ", m, " nlocal is ",atom->nlocal, "\n");
+    //delete atom
     atom->natoms--;
     atom->nlocal--;
+    // fprintf(screen, "%s %d %s %d %s", "after delete, m is ", m, " nlocal is ",atom->nlocal, "\n");
+    
     if (force->kspace) force->kspace->qsum_qsq();
     energy_stored = energy_before;
   }

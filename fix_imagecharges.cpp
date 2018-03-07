@@ -339,9 +339,12 @@ void FixImageCharges::pre_force(int vflag){
   int ntypes = atom->ntypes;
   int nadded = 0;
   int atomIndex = nlocal;
+  int seenCount = 0;
+  int reqCount = 0;
 
   bool toDelete = false;
   int dlist[nlocal]; //list to use as a mask for atoms that need to be deleted
+
 
 
   // update region if necessary
@@ -369,7 +372,9 @@ void FixImageCharges::pre_force(int vflag){
         // check to see if an image charge already exists
         int j = imagei[i];
         //check to see if this is an image charge itself
-        if(j == -1){ //make sure actually associated with a charge
+        if(j == -1){ // this is an image charge, will get taken care of later or deleted
+          toDelete[i] = !toDelete[i];
+          seenCount++;
           continue;
         }
 
@@ -384,6 +389,7 @@ void FixImageCharges::pre_force(int vflag){
 
         // new image at coordinates
         if (j == -2 || j==0){ //used to not be in region or is new atom
+          // probably won't fail even if j was supposed to be zero
           j=atomIndex;
           imagei[i] = j;
           imageid[i] = j;
@@ -391,6 +397,9 @@ void FixImageCharges::pre_force(int vflag){
           nadded++;
           atom->avec->create_atom(itype,r); //add a new atom
         }else{
+          // mark that we updated/saw this image
+          toDelete[j] = !toDelete[j];
+          reqCount++;
           // update image coordinates
           for (int k=0; k<3; ++k){
             x[j][k] = r[k];
@@ -403,32 +412,39 @@ void FixImageCharges::pre_force(int vflag){
         imageid[j] = -1;
       }
     }
-
     // } else { TODO add the atom and equal style interpretations
-  } 
-  // deal with the deleteList
-    if (toDelete){
-      int i = 0;
-      while (i<nlocal){
-        if (dlist[i]){
-            atom -> avec -> copy(nlocal-1, i, 1);
-            dlist[i] = dlist[nlocal-1];
-          nlocal--;
-        } else i++;
-      }
-    }
+  }
 
-    if(nadded){
-      atom->natoms += nadded;
-      if (atom->natoms < 0)
-        error->all(FLERR,"Too many total atoms");
-      if (atom->tag_enable) atom->tag_extend();
-      if (atom->map_style) {
-        atom->nghost = 0;
-        atom->map_init();
-        atom->map_set();
-      }
+  // deal with the deleteList
+  if (seenCount > reqCount){
+    toDelete = true;
+  }
+  if (toDelete){
+    int i = 0;
+    while (i<nlocal){
+      if (dlist[i]){
+          atom -> avec -> copy(nlocal-1, i, 1);
+          dlist[i] = dlist[nlocal-1];
+        nlocal--;
+      } else i++;
     }
+  }
+
+  if(nadded){
+    atom->natoms += nadded;
+    if (atom->natoms < 0)
+      error->all(FLERR,"Too many total atoms");
+    if (atom->tag_enable) atom->tag_extend();
+    if (atom->map_style) {
+      atom->nghost = 0;
+      atom->map_init();
+      atom->map_set();
+    }
+  }
+  //free up some memory
+  delete[] imgSeen;
+  delete[] imgReq;
+
 }
 
 void FixImageCharges::post_force(int vflag){

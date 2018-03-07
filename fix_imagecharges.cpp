@@ -373,7 +373,7 @@ void FixImageCharges::pre_force(int vflag){
         int j = imagei[i];
         //check to see if this is an image charge itself
         if(j == -1){ // this is an image charge, will get taken care of later or deleted
-          toDelete[i] = !toDelete[i];
+          dlist[i] = !dlist[i];
           seenCount++;
           continue;
         }
@@ -398,7 +398,7 @@ void FixImageCharges::pre_force(int vflag){
           atom->avec->create_atom(itype,r); //add a new atom
         }else{
           // mark that we updated/saw this image
-          toDelete[j] = !toDelete[j];
+          dlist[j] = !dlist[j];
           reqCount++;
           // update image coordinates
           for (int k=0; k<3; ++k){

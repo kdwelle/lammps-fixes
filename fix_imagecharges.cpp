@@ -38,11 +38,11 @@ enum{NONE,CONSTANT,EQUAL,ATOM};
 
 FixImageCharges::FixImageCharges(LAMMPS *lmp, int narg, char **arg) :
 	Fix(lmp, narg, arg),
-	pxstr(NULL), pystr(NULL), pzstr(NULL), 
-	nxstr(NULL), nystr(NULL), nzstr(NULL), 
+	pxstr(NULL), pystr(NULL), pzstr(NULL),
+	nxstr(NULL), nystr(NULL), nzstr(NULL),
 	idregion(NULL), scalestr(NULL), imagei(NULL), imageid(NULL){
 		if (narg < 10) error->all(FLERR,"Illegal fix imagecharges command -- not enough arguments");
-		
+
 		// initialize the array to keep track of image charge associations
 		memory->create(imagei, atom->nmax, "FixImageCharges::imagei");
 		memory->create(imageid, atom->nmax, "FixImageCharges::imagei");
@@ -57,55 +57,55 @@ FixImageCharges::FixImageCharges(LAMMPS *lmp, int narg, char **arg) :
 	    pxstyle = CONSTANT;
 	  }
 
-  	if (strstr(arg[4],"v_") == arg[4]) { 
-	    int n = strlen(&arg[4][2]) + 1;    
-	    pystr = new char[n];                
-	    strcpy(pystr,&arg[4][2]);           
+  	if (strstr(arg[4],"v_") == arg[4]) {
+	    int n = strlen(&arg[4][2]) + 1;
+	    pystr = new char[n];
+	    strcpy(pystr,&arg[4][2]);
 	  } else {
-	    pyvalue = force->numeric(FLERR,arg[4]); 
+	    pyvalue = force->numeric(FLERR,arg[4]);
 	    pystyle = CONSTANT;
 	  }
-		
-  	if (strstr(arg[5],"v_") == arg[5]) { 
-	    int n = strlen(&arg[5][2]) + 1;    
-	    pzstr = new char[n];                
-	    strcpy(pzstr,&arg[5][2]);           
+
+  	if (strstr(arg[5],"v_") == arg[5]) {
+	    int n = strlen(&arg[5][2]) + 1;
+	    pzstr = new char[n];
+	    strcpy(pzstr,&arg[5][2]);
 	  } else {
-	    pzvalue = force->numeric(FLERR,arg[5]); 
+	    pzvalue = force->numeric(FLERR,arg[5]);
 	    pzstyle = CONSTANT;
 	  }
 
 	  // next three arguments define a vector normal to the plane
-    if (strstr(arg[6],"v_") == arg[6]) { 
-	    int n = strlen(&arg[6][2]) + 1;    
-	    nxstr = new char[n];                
-	    strcpy(nxstr,&arg[6][2]);           
+    if (strstr(arg[6],"v_") == arg[6]) {
+	    int n = strlen(&arg[6][2]) + 1;
+	    nxstr = new char[n];
+	    strcpy(nxstr,&arg[6][2]);
 	  } else {
-	    nxvalue = force->numeric(FLERR,arg[6]); 
+	    nxvalue = force->numeric(FLERR,arg[6]);
 	    nxstyle = CONSTANT;
 	  }
 
-    if (strstr(arg[7],"v_") == arg[7]) { 
-	    int n = strlen(&arg[7][2]) + 1;    
-	    nystr = new char[n];                
-	    strcpy(nystr,&arg[7][2]);           
+    if (strstr(arg[7],"v_") == arg[7]) {
+	    int n = strlen(&arg[7][2]) + 1;
+	    nystr = new char[n];
+	    strcpy(nystr,&arg[7][2]);
 	  } else {
-	    nyvalue = force->numeric(FLERR,arg[7]); 
+	    nyvalue = force->numeric(FLERR,arg[7]);
 	    nystyle = CONSTANT;
 	  }
 
-    if (strstr(arg[8],"v_") == arg[8]) { 
+    if (strstr(arg[8],"v_") == arg[8]) {
 	    int n = strlen(&arg[8][2]) + 1;
 	    nzstr = new char[n];
 	    strcpy(nzstr,&arg[8][2]);
 	  } else {
-	    nzvalue = force->numeric(FLERR,arg[8]); 
+	    nzvalue = force->numeric(FLERR,arg[8]);
 	    nzstyle = CONSTANT;
 	  }
 
 	  // itype -- index for the image charge types
 	  // go ahead and evaluate itype only once
-	  if (strstr(arg[9],"v_") == arg[9]) { 
+	  if (strstr(arg[9],"v_") == arg[9]) {
 	    int itypevar = input->variable->find(&arg[8][2]);
 	    if (itypevar < 0){
 				error->all(FLERR,"Variable name for fix imagecharges (itype) does not exist");
@@ -116,7 +116,7 @@ FixImageCharges::FixImageCharges(LAMMPS *lmp, int narg, char **arg) :
 	    	error->all(FLERR,"Variable for fix imagecharges (itype) is invalid style");
 	    }
 	  } else {
-	    itype = force->inumeric(FLERR,arg[9]); 
+	    itype = force->inumeric(FLERR,arg[9]);
 	  }
 
 
@@ -149,7 +149,7 @@ FixImageCharges::FixImageCharges(LAMMPS *lmp, int narg, char **arg) :
 				scalestyle = CONSTANT;
 			}
 			iarg += 2;
-    
+
     } else error->all(FLERR,"Illegal fix imagecharges command"); // not a recognized keyword
   }
 
@@ -236,7 +236,7 @@ void FixImageCharges::init(){
     else if (input->variable->atomstyle(nzvar)) nzstyle = ATOM;
     else error->all(FLERR,"Variable for fix imagecharges (nz) is invalid style");
   }
- 
+
 
   // set index and check validity of region
   if (iregion >= 0) {
@@ -306,9 +306,9 @@ void FixImageCharges::setup_pre_force(int vflag){
 	        atom->q[atomIndex] = -1*scale*q[i];
 	        imagei[i] = atomIndex;
 	        imageid[i] = atomIndex;
-	        imagei[atomIndex] = -1;	 
+	        imagei[atomIndex] = -1;
 	        imageid[atomIndex] = -1;
-	        atomIndex++;      
+	        atomIndex++;
 	      }
 
   	vector_atom = imageid;
@@ -354,7 +354,7 @@ void FixImageCharges::pre_force(int vflag){
   }
 
   if (varflag == CONSTANT) {
-	    for (int i = 0; i < nlocal; i++)
+	    for (int i = 0; i < nlocal; i++){
 	      if (mask[i] & groupbit) {
 	        if (region && !region->match(x[i][0],x[i][1],x[i][2])){
 	        	// check to see if there's an existing image charge to be deleted
@@ -363,15 +363,17 @@ void FixImageCharges::pre_force(int vflag){
 	        		dlist[imagei[i]] = 1;
 	        		nadded--; //got rid of an atom so keep accounting constant
 	        		imagei[i] = -2;
-	        		imageid[i] = -2; 
+	        		imageid[i] = -2;
 	        	}
 	        	continue;
 	        }
 	        // check to see if an image charge already exists
 	        int j = imagei[i];
 	        //check to see if this is an image charge itself
-	        if(j == -1)  continue;
-	        
+	        if(j == -1){ //make sure actually associated with a charge
+            continue;
+          }
+
 	        // get new position -- transform coordinates across plane
 	        double nnorm = sqrt(nxvalue*nxvalue + nyvalue*nyvalue + nzvalue*nzvalue);
 	        double prefactor = 2*(nxvalue/nnorm*x[i][0] + nyvalue/nnorm*x[i][1] + nzvalue/nnorm*x[i][2]);
@@ -380,31 +382,35 @@ void FixImageCharges::pre_force(int vflag){
 	        r[0] = x[i][0] - (prefactor-delta)*nxvalue;
 	        r[1] = x[i][1] - (prefactor-delta)*nyvalue;
 	        r[2] = x[i][2] - (prefactor-delta)*nzvalue;
-	        
+
 	        // new image at coordinates
-	        if (j == -2){
+	        if (j == -2 || j==0){ //used to not be in region or is new atom
 	        	j=atomIndex;
-	        	atomIndex++;  
+            imagei[i] = j;
+            imageid[i] = j;
+	        	atomIndex++;
 	        	nadded++;
 	        	atom->avec->create_atom(itype,r); //add a new atom
-	        }
-          
-	        // update image coordinates
-	        for (int k=0; k<3; ++k){
-	        	x[j][k] = r[k];
-	        }
-	        
+	        }else{
+  	      // update image coordinates
+  	        for (int k=0; k<3; ++k){
+  	        	x[j][k] = r[k];
+  	        }
+          }
+
 	        atom->q[j] = -1*scale*q[i]; //update charge
 	        imagei[i] = j;
 	        imageid[i] = j;
 	        imagei[j] = -1;
-	        imageid[j] = -1;	 
-	            
+	        imageid[j] = -1;
+
 	      }
+      }
 
 	// } else { TODO add the atom and equal style interpretations
 
 	}
+
 
 	// deal with the deleteList
 	if (toDelete){
@@ -488,7 +494,7 @@ void FixImageCharges::copy_arrays(int i, int j, int delflag){
 				imagei[x] = j; //now points to new location
 				imageid[x] = j;
 			}
-		} 
+		}
 	}
 
 	// imageid[j] = imageid[i];

@@ -18,7 +18,7 @@
 #include <math.h>
 #include <stdlib.h>
 
-#include "fix_electrodeboundaries.hp"
+#include "fix_electrodeboundaries.h"
 #include "fix.h"
 
 #include "atom.h"
@@ -52,26 +52,27 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
 
   dr = 0.5; //plus/minus search for ion in vicinity
   xcut = 2.0; //distance from electrode to check for electrochem
-  ncycles = 100; //number of attempts per timestep
+  ncycles = 10; //number of attempts per timestep
   charge = 1;
   charge_flag = true;
+  sigma = sqrt(force->boltz/force->mvv2e);
 
 
   if (narg < 8) error->all(FLERR,"Illegal fix electrodeboundaries command -- not enough arguments");
 
   // electrodes have to lie along the x-axis
-  // Next argument is a distance between electrodes 
-  xlo = force->numeric(FLERR,arg[3]); 
-  dist = force->numeric(FLERR,arg[4]); 
+  // Next argument is a distance between electrodes
+  xlo = force->numeric(FLERR,arg[3]);
+  dist = force->numeric(FLERR,arg[4]);
   xhi = xlo + dist;
   // Then voltage@defined plane and voltage difference between electrodes
-  v0 = force->numeric(FLERR,arg[5]); 
-  dv = force->numeric(FLERR,arg[6]); 
+  v0 = force->numeric(FLERR,arg[5]);
+  dv = force->numeric(FLERR,arg[6]);
   etype = force->inumeric(FLERR,arg[7]); //type of atom that is electrochemically active
   seed = force->inumeric(FLERR,arg[8]);
 
   if (seed <= 0) error->all(FLERR,"Illegal fix electrodeboundaries command -- seed cannot be zero or negative");
-  
+
 
 	// optional arguments
 	iregion = -1;
@@ -163,8 +164,6 @@ void FixElectrodeBoundaries::init(){
   int ipe = modify->find_compute(id_pe);
   c_pe = modify->compute[ipe];
 
-  // set energy
-  energy_stored = energy_full();
 
 }
 
@@ -197,7 +196,7 @@ void FixElectrodeBoundaries::pre_exchange(){
     }
 
     int index = is_particle(coords);
-    if (index == -1){
+    if (index > -1){
       //attempt reduction
       attempt_reduction(index, side);
 
@@ -228,7 +227,7 @@ int FixElectrodeBoundaries::is_particle(double *coords){
   //probably going to be very slow -- oh well let's try it
   for (int i=0; i<nlocal; ++i){
     if(mask[i] & groupbit){
-      if (type[i]==etype){   
+      if (type[i]==etype){
         if (x[i][0] > xmin){
           if (x[i][0] < xmax){
             if (x[i][1] > ymin){
@@ -249,7 +248,6 @@ int FixElectrodeBoundaries::is_particle(double *coords){
 }
 
 void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
-  
 
   side? rightOxAttempts++ : leftOxAttempts++;
 
@@ -280,7 +278,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
   if (force->kspace) force->kspace->qsum_qsq();
   double energy_after = energy_full();
 
-  if (random_equal->uniform() > get_transfer_probability(energy_after-energy_before,side) ){ 
+  if (random_equal->uniform() > get_transfer_probability(energy_after-energy_before,side) ){
   // metropolis condition -- greater than becaude get_transfer probability return p(x) for reduction, oxidation = 1-P(x)
     energy_stored = energy_after;
     (side)? rightOx++ : leftOx++;
@@ -335,7 +333,7 @@ float FixElectrodeBoundaries::get_transfer_probability(float dE, int side){
 
   //TODO: include temperature in this
 
-  float x = dE + v0 + side*(dv); 
+  float x = dE + v0 + side*(dv);
   return 1/(1+exp(x));
 }
 
@@ -359,7 +357,7 @@ double FixElectrodeBoundaries::energy_full()
 
   // clear forces so they don't accumulate over multiple
   // calls within fix gcmc timestep, e.g. for fix shake
-  
+
   size_t nbytes = sizeof(double) * (atom->nlocal + atom->nghost);
   if (nbytes) memset(&atom->f[0][0],0,3*nbytes);
 
@@ -384,5 +382,3 @@ double FixElectrodeBoundaries::energy_full()
 
   return total_energy;
 }
-
-

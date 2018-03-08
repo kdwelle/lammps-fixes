@@ -50,9 +50,9 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   Fix(lmp, narg, arg),
 	idregion(NULL){
 
-  dr = 0.5; //plus/minus search for ion in vicinity
+  dr = 5.0; //plus/minus search for ion in vicinity
   xcut = 2.0; //distance from electrode to check for electrochem
-  ncycles = 10; //number of attempts per timestep
+  ncycles = 1; //number of attempts per timestep
   charge = 1;
   charge_flag = true;
   sigma = sqrt(force->boltz/force->mvv2e);
@@ -81,7 +81,7 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
 	int iarg = 9;	//start after madatory arguments
 	while (iarg < narg) {
     if (strcmp(arg[iarg],"region") == 0) { //keyword = region
-        error->all(FLERR,"fix electrodeboundaries does not support regions");
+      error->all(FLERR,"fix electrodeboundaries does not support regions");
     iarg += 2;
     } else error->all(FLERR,"Illegal fix electrodeboundaries command"); // not a recognized keyword
   }
@@ -198,15 +198,22 @@ void FixElectrodeBoundaries::pre_exchange(){
     int index = is_particle(coords);
     if (index > -1){
       //attempt reduction
-      // attempt_reduction(index, side);
+      fprintf(screen, "attempt reduction \n");
+      attempt_reduction(index, side);
 
     }else{
       //attempt oxidation
+      fprintf(screen, "attempt oxidation \n");
       attempt_oxidation(coords, side);
 
-    }
 
+
+    }
+    
   }
+  fprintf(screen, "Left oxidations: %d / %d \n Right oxidations: %d / %d \n", leftOx, leftOxAttempts, rightOx, rightOxAttempts);
+  fprintf(screen, "Left reductions: %d / %d \n Right reductions: %d / %d \n", leftRed, leftRedAttempts, rightRed, rightRedAttempts);
+
 }
 
 int FixElectrodeBoundaries::is_particle(double *coords){
@@ -275,12 +282,11 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
   }
   atom->nghost = 0;
 
-  if (force->kspace) force->kspace->qsum_qsq();
   double energy_after = energy_full();
 
   double de = energy_after-energy_before;
   double prob = get_transfer_probability(de,side);
-  fprintf(screen, "%s %f %s %f %s", "energy is ", de, " and prob is ",prob, "\n");
+  // fprintf(screen, "%s %f %s %f %s", "energy is ", de, " and prob is ",prob, "\n");
   if (random_equal->uniform() > prob ){
   // metropolis condition -- greater than because get_transfer probability return p(x) for reduction, oxidation = 1-P(x)
     energy_stored = energy_after;
@@ -324,8 +330,11 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
   }
   if (force->kspace) force->kspace->qsum_qsq();
   double energy_after = energy_full();
+  double de = energy_after-energy_before;
+  double prob = get_transfer_probability(de,side);
+  // fprintf(screen, "%s %f %s %f %s", "energy is ", de, " and prob is ",prob, "\n");
 
-  if (random_equal->uniform() < get_transfer_probability(energy_after-energy_before,side)) {
+  if (random_equal->uniform() < prob) {
     atom->avec->copy(atom->nlocal-1,i,1);
     atom->nlocal--;
     atom->natoms--;

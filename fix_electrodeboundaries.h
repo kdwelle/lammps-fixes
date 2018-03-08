@@ -46,7 +46,7 @@ class FixElectrodeBoundaries : public Fix {
   double ylo,yhi,zlo,zhi;
   bool charge_flag;
   double energy_stored;
-  int exclusion_group, exclusion_group_bit;
+  int exclusion_group;
   int varflag,iregion,etype,ncycles,seed;
   int leftOx, leftOxAttempts;
   int leftRed, leftRedAttempts;
@@ -58,6 +58,8 @@ class FixElectrodeBoundaries : public Fix {
 
   int force_flag;
   int nlevels_respa,ilevel_respa;
+  int exclusion_group_bit;
+
 
   int maxatom;
   double **sforce;

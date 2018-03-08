@@ -18,15 +18,18 @@
 #include <string.h>
 #include <stdlib.h>
 #include "fix_imagecharges.h"
+#include "fix_electrodeboundaries.h"
 #include "atom.h"
 #include "atom_vec.h"
 #include "domain.h"
-#include "region.h"
 #include "error.h"
 #include "force.h"
+#include "group.h"
 #include "input.h"
-#include "variable.h"
 #include "memory.h"
+#include "region.h"
+#include "variable.h"
+
 
 
 using namespace LAMMPS_NS;
@@ -261,6 +264,13 @@ void FixImageCharges::init(){
     varflag = EQUAL;
   else varflag = CONSTANT;
 
+  // get the index of the "all" groupbit
+  // char *tempFind = new char[3];
+  // std::sprintf(tempFind,"%s","all");
+  // int temp_ind = group->find(tempFind);
+  // group_bit_all = group->bitmask[temp_ind];
+  // std::fprintf(screen, "%s %d %s", "group_bit_all is: ", group_bit_all, "\n");
+
 }
 
 void FixImageCharges::setup_pre_force(int vflag){
@@ -304,6 +314,7 @@ void FixImageCharges::setup_pre_force(int vflag){
         nadded++;
         atom->avec->create_atom(itype,r);
         atom->q[atomIndex] = -1*scale*q[i];
+        atom->mask[atomIndex] = groupbit;
         imagei[i] = atomIndex;
         imageid[i] = atomIndex;
         imagei[atomIndex] = -1;
@@ -326,6 +337,13 @@ void FixImageCharges::setup_pre_force(int vflag){
     }
   }
 
+  // //same for exclusion
+  // int len = strlen(id) + 30;
+  // char *group_arg = new char[len];
+  // std::sprintf(group_arg,"FixGCMC:gcmc_exclusion_group:%s",id);
+  // exclusion_group = group->find(group_arg);
+  // std::fprintf(screen, "%s %d %s", "exclusion_bit is: ", exclusion_group, "\n");
+
 }
 
 void FixImageCharges::pre_force(int vflag){
@@ -341,10 +359,18 @@ void FixImageCharges::pre_force(int vflag){
   int atomIndex = nlocal;
   int seenCount = 0;
   int reqCount = 0;
+  int tmpmask;
 
   bool toDelete = false;
   int dlist[nlocal]; //list to use as a mask for atoms that need to be deleted
   int imList[nlocal];
+  int imReqList[nlocal];
+
+  for (int i=0; i<nlocal; i++){ //initialize
+    dlist[i] = 0;
+    imList[i] = 0;
+    imReqList[i] = 0;
+  }
 
   // update region if necessary
 
@@ -372,7 +398,7 @@ void FixImageCharges::pre_force(int vflag){
         int j = imagei[i];
 
         if(j == -1){ // this is an image charge, will get taken care of later or deleted
-          imList[i] = !imList[i];
+          dlist[i] = !dlist[i];
           seenCount++;
         }else{
           // get new position -- transform coordinates across plane
@@ -393,10 +419,11 @@ void FixImageCharges::pre_force(int vflag){
             atomIndex++;
             nadded++;
             atom->avec->create_atom(itype,r); //add a new atom
+            atom->mask[atomIndex] = groupbit;
           
           }else{
             // mark that we updated/saw this image
-            imList[j] = !imList[j];
+            dlist[j] = !dlist[j];
             reqCount++;
             
             // update image coordinates
@@ -417,9 +444,9 @@ void FixImageCharges::pre_force(int vflag){
 
   // deal with the deleteList
   if (seenCount > reqCount){
-    fprintf(screen,"%s", "difference in: ");
+    fprintf(screen,"%s", "in imList: ");
     for (int i=0; i<nlocal; i++){
-      if (imList[i]) fprintf(screen,"%d %s", i, ", ");
+      if (dlist[i]) fprintf(screen,"%d %s", i, ", ");
     }
     toDelete = true;
     fprintf(screen,"%s", "\n");
@@ -431,7 +458,8 @@ void FixImageCharges::pre_force(int vflag){
       if (dlist[i]){
         atom -> avec -> copy(nlocal-1, i, 1);
         dlist[i] = dlist[nlocal-1];
-        nlocal--;
+        atom->nlocal--;
+        nadded--;
       } else i++;
     }
     
@@ -467,15 +495,15 @@ void FixImageCharges::post_force(int vflag){
 
   if (varflag == CONSTANT) {
     for (int i = 0; i < nlocal; i++){
-      if (mask[i] & groupbit) {
-        if (region && !region->match(x[i][0],x[i][1],x[i][2])) continue;
+      // if (mask[i] & groupbit) {
+        // if (region && !region->match(x[i][0],x[i][1],x[i][2])) continue;
         // check whether this is an image charge
         if (imagei[i] == -1){
           f[i][0] = 0; //if so zero forces
           f[i][1] = 0;
           f[i][2] = 0;
         }
-      }
+      // }
     }
   }
 

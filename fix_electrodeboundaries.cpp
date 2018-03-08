@@ -306,6 +306,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
     atom->nlocal--;
     // fprintf(screen, "%s %d %s %d %s", "after delete, m is ", m, " nlocal is ",atom->nlocal, "\n");
     
+    if (modify->n_pre_force) modify->pre_force(0);
     if (force->kspace) force->kspace->qsum_qsq();
     energy_stored = energy_before;
   }
@@ -344,6 +345,7 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
   } else { //not accepted
     atom->mask[i] = tmpmask;
     if (q_flag) atom->q[i] = q_tmp;
+    if (modify->n_pre_force) modify->pre_force(0);
     if (force->kspace) force->kspace->qsum_qsq();
     energy_stored = energy_before;
   }

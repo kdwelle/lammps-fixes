@@ -419,7 +419,7 @@ void FixImageCharges::pre_force(int vflag){
             atomIndex++;
             nadded++;
             atom->avec->create_atom(itype,r); //add a new atom
-            atom->mask[atomIndex] = groupbit;
+            atom->mask[j] = groupbit;
           
           }else{
             // mark that we updated/saw this image
@@ -443,11 +443,16 @@ void FixImageCharges::pre_force(int vflag){
   }
 
   // deal with the deleteList
+  nlocal = atom->nlocal;
+  fprintf(screen, "seenCount is %d, reqCount is %d, diff is: \n", seenCount, reqCount);
+  for (int i=0; i<nlocal; i++){
+    if (dlist[i]) {
+      fprintf(screen,"%d : %d, ", i, imagei[i]);
+    }
+  }
+    fprintf(screen,"\n");
   if (seenCount > reqCount){
     fprintf(screen,"%s", "in imList: ");
-    for (int i=0; i<nlocal; i++){
-      if (dlist[i]) fprintf(screen,"%d %s", i, ", ");
-    }
     toDelete = true;
     fprintf(screen,"%s", "\n");
   }

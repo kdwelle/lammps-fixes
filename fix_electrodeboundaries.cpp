@@ -198,7 +198,7 @@ void FixElectrodeBoundaries::pre_exchange(){
     int index = is_particle(coords);
     if (index > 0){ //hack because image charges messes up when excluded atom is index 0
       //attempt reduction
-      fprintf(screen, "attempt reduction on index %d \n", i);
+      fprintf(screen, "attempt reduction on index %d \n", index);
       attempt_reduction(index, side);
 
     }else{
@@ -224,8 +224,8 @@ int FixElectrodeBoundaries::is_particle(double *coords){
   int nlocal = atom->nlocal;
   int *mask = atom->mask;
 
-  float xmin=coords[0]-dr;
-  float xmax=coords[0]+dr;
+  float xmin=max(coords[0]-dr, xlo);
+  float xmax=min(coords[0]+dr, xhi);
   float ymin=coords[1]-dr;
   float ymax=coords[1]+dr;
   float zmin=coords[2]-dr;

@@ -387,98 +387,96 @@ void FixImageCharges::pre_force(int vflag){
     region->prematch();
   }
 
-  if (varflag == CONSTANT) {
-    for (int i = 0; i < nlocal; i++){
-      if (mask[i] & groupbit) {
-        // if (region && !region->match(x[i][0],x[i][1],x[i][2])){
-        //   // check to see if there's an existing image charge to be deleted
-        //   if (imagei[i] >= 0) {
-        //       toDelete = true;
-        //       dlist[imagei[i]] = 1;
-        //       nadded--; //got rid of an atom so keep accounting constant
-        //       imagei[i] = -2;
-        //       imageid[i] = -2;
-        //   }
-        //   continue;
-        // }
-        // check to see if an image charge already exists
-        int j = imagei[i];
+  for (int i = 0; i < nlocal; i++){
+    if (mask[i] & groupbit) {
+      // if (region && !region->match(x[i][0],x[i][1],x[i][2])){
+      //   // check to see if there's an existing image charge to be deleted
+      //   if (imagei[i] >= 0) {
+      //       toDelete = true;
+      //       dlist[imagei[i]] = 1;
+      //       nadded--; //got rid of an atom so keep accounting constant
+      //       imagei[i] = -2;
+      //       imageid[i] = -2;
+      //   }
+      //   continue;
+      // }
+      // check to see if an image charge already exists
+      int j = imagei[i];
 
-        if(j == -1){ // this is an image charge, will get taken care of later or deleted
-          dlist[i] = !dlist[i];
-          seenCount++;
-        }else{
-          // get new position -- transform coordinates across plane
-          double nnorm = sqrt(nxvalue*nxvalue + nyvalue*nyvalue + nzvalue*nzvalue);
-          double prefactor = 2*(nxvalue/nnorm*x[i][0] + nyvalue/nnorm*x[i][1] + nzvalue/nnorm*x[i][2]);
-          double delta = 2*(nxvalue/nnorm*pxvalue + nyvalue/nnorm*pyvalue + nzvalue/nnorm*pzvalue);
-          double r[3];
-          r[0] = x[i][0] - (prefactor-delta)*nxvalue;
-          r[1] = x[i][1] - (prefactor-delta)*nyvalue;
-          r[2] = x[i][2] - (prefactor-delta)*nzvalue;
+      if(j == -1){ // this is an image charge, will get taken care of later or deleted
+        dlist[i] = !dlist[i];
+        seenCount++;
+      }else{
+        // get new position -- transform coordinates across plane
+        double nnorm = sqrt(nxvalue*nxvalue + nyvalue*nyvalue + nzvalue*nzvalue);
+        double prefactor = 2*(nxvalue/nnorm*x[i][0] + nyvalue/nnorm*x[i][1] + nzvalue/nnorm*x[i][2]);
+        double delta = 2*(nxvalue/nnorm*pxvalue + nyvalue/nnorm*pyvalue + nzvalue/nnorm*pzvalue);
+        double r[3];
+        r[0] = x[i][0] - (prefactor-delta)*nxvalue;
+        r[1] = x[i][1] - (prefactor-delta)*nyvalue;
+        r[2] = x[i][2] - (prefactor-delta)*nzvalue;
+      
+        if(j == -2 || j==0 || j >= nlocal){ //used to not be in region or is new atom
+          // probably won't fail even if j was supposed to be zero
+          j=atomIndex;
+
+          fprintf(screen,"%s %d %s %d %s", "New atom ", i, " gets image ", j, "\n");
+          atomIndex++;
+          nadded++;
+          nchanged++;
+          atom->avec->create_atom(itype,r); //add a new atom
+          atom->mask[j] = groupbit;
         
-          if(j == -2 || j==0 || j >= nlocal){ //used to not be in region or is new atom
-            // probably won't fail even if j was supposed to be zero
-            j=atomIndex;
-
-            fprintf(screen,"%s %d %s %d %s", "New atom ", i, " gets image ", j, "\n");
-            atomIndex++;
-            nadded++;
-            nchanged++;
-            atom->avec->create_atom(itype,r); //add a new atom
-            atom->mask[j] = groupbit;
-          
-          }else{
-            // mark that we updated/saw this image
-            dlist[j] = !dlist[j];
-            reqCount++;
-            
-            // update image coordinates
-            for (int k=0; k<3; ++k){
-              x[j][k] = r[k];
-            }
-            //update type if necessary
-            // fprintf(screen, "i is %d, exclusionAtom is %d \n", i, exclusionAtom);
-            if(i == exclusionAtom){
-              fprintf(screen, "i = %d updated type of atom: %d \n",i, j);
-              atom->mask[j] = groupbit;
-              exclusionAtom = -1;
-            }
-          }
-          atom->q[j] = -1*scale*q[i]; //update charge
-          imagei[i] = j;
-          imageid[i] = j;
-          imagei[j] = -1;
-          imageid[j] = -1;
-        }
-      }else{ //not in group
-        int j = imagei[i];
-        if (j > 0){ //exclusion group atom
-          fprintf(screen, "excluded: %d , image: %d \n", i, imagei[i]);
-          atom->mask[j] = atom->mask[i];
-          fprintf(screen, "changed type of atom: %d to exclude \n", j);
+        }else{
+          // mark that we updated/saw this image
           dlist[j] = !dlist[j];
           reqCount++;
-          exclusionAtom = i;
-          excludedHere = j;
-        }else if (j == -1){
-          dlist[i] = !dlist[i];
-          seenCount++;
-          if(i != excludedHere){ //just excluded image charge
-            fprintf(screen, "unexcluded: %d , image: %d \n", i, imagei[i]);
-            mask[j] = groupbit;
+          
+          // update image coordinates
+          for (int k=0; k<3; ++k){
+            x[j][k] = r[k];
           }
+          //update type if necessary
+          // fprintf(screen, "i is %d, exclusionAtom is %d \n", i, exclusionAtom);
+          if(i == exclusionAtom){
+            fprintf(screen, "i = %d updated type of atom: %d \n",i, j);
+            atom->mask[j] = groupbit;
+            exclusionAtom = -1;
+          }
+        }
+        atom->q[j] = -1*scale*q[i]; //update charge
+        imagei[i] = j;
+        imageid[i] = j;
+        imagei[j] = -1;
+        imageid[j] = -1;
+      }
+    }else{ //not in group
+      int j = imagei[i];
+      if (j > 0){ //exclusion group atom
+        fprintf(screen, "excluded: %d , image: %d \n", i, imagei[i]);
+        atom->mask[j] = atom->mask[i];
+        fprintf(screen, "changed type of atom: %d to exclude \n", j);
+        dlist[j] = !dlist[j];
+        reqCount++;
+        exclusionAtom = i;
+        excludedHere = j;
+      }else if (j == -1){
+        dlist[i] = !dlist[i];
+        seenCount++;
+        if(i != excludedHere){ //just excluded image charge
+          fprintf(screen, "unexcluded: %d , image: %d \n", i, imagei[i]);
+          mask[j] = groupbit;
         }
       }
     }
   }
     // } else { TODO add the atom and equal style interpretations
-
+  int oldnlocal=nlocal;
   // deal with the deleteList
   nlocal = atom->nlocal;
   fprintf(screen, "nlocal is %d \n", nlocal);
   fprintf(screen, "seenCount is %d, reqCount is %d, diff is: \n", seenCount, reqCount);
-  for (int i=0; i<nlocal; i++){
+  for (int i=0; i<oldnlocal; i++){
     if (dlist[i]) {
       fprintf(screen,"%d : %d, ", i, imagei[i]);
     }
@@ -506,7 +504,7 @@ void FixImageCharges::pre_force(int vflag){
     fprintf(screen,"nadded is now %d \n", nadded);
 
     nlocal = atom->nlocal;
-    for(int i=nlocal; i<nlocal+nchanged*2; ++i){ //zero out the rest if something changed
+    for(int i=nlocal; i<nlocal+nchanged*3; ++i){ //zero out the rest if something changed
       if (i < atom->nmax){
         imagei[i] = 0;
         imageid[i] = 0;

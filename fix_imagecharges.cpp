@@ -370,16 +370,13 @@ void FixImageCharges::pre_force(int vflag){
   int tmpmask;
   int nchanged = 0;
 
+  int excludedHere = -1;
+
   bool toDelete = false;
   int dlist[nlocal]; //list to use as a mask for atoms that need to be deleted
-  int imList[nlocal];
-  int imReqList[nlocal];
 
   for (int i=0; i<nlocal; i++){ //initialize
     dlist[i] = 0;
-    imList[i] = 0;
-    imReqList[i] = 0;
-
   }
 
   // update region if necessary
@@ -443,8 +440,9 @@ void FixImageCharges::pre_force(int vflag){
             //update type if necessary
             // fprintf(screen, "i is %d, exclusionAtom is %d \n", i, exclusionAtom);
             if(i == exclusionAtom){
-              fprintf(screen, "updated type of atom: %d \n", j);
+              fprintf(screen, "i = %d updated type of atom: %d \n",i, j);
               atom->mask[j] = groupbit;
+              exclusionAtom = -1;
             }
           }
           atom->q[j] = -1*scale*q[i]; //update charge
@@ -454,22 +452,27 @@ void FixImageCharges::pre_force(int vflag){
           imageid[j] = -1;
         }
       }else{ //not in group
-        fprintf(screen, "excluded: %d , image: %d \n", i, imagei[i]);
         int j = imagei[i];
         if (j > 0){ //exclusion group atom
+          fprintf(screen, "excluded: %d , image: %d \n", i, imagei[i]);
           atom->mask[j] = atom->mask[i];
           fprintf(screen, "changed type of atom: %d to exclude \n", j);
           dlist[j] = !dlist[j];
           reqCount++;
           exclusionAtom = i;
-        }else if (j == -1){ //excluded image charge
+          excludedHere = j;
+        }else if (j == -1){
           dlist[i] = !dlist[i];
           seenCount++;
+          if(i != excludedHere){ //just excluded image charge
+            fprintf(screen, "unexcluded: %d , image: %d \n", i, imagei[i]);
+            mask[j] = groupbit;
+          }
         }
       }
     }
-    // } else { TODO add the atom and equal style interpretations
   }
+    // } else { TODO add the atom and equal style interpretations
 
   // deal with the deleteList
   nlocal = atom->nlocal;
@@ -503,7 +506,7 @@ void FixImageCharges::pre_force(int vflag){
     fprintf(screen,"nadded is now %d \n", nadded);
 
     nlocal = atom->nlocal;
-    for(int i=nlocal; i<nlocal+nchanged; ++i){ //zero out the rest if something changed
+    for(int i=nlocal; i<nlocal+nchanged*2; ++i){ //zero out the rest if something changed
       if (i < atom->nmax){
         imagei[i] = 0;
         imageid[i] = 0;

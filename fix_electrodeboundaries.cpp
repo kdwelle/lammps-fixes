@@ -329,7 +329,6 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
       atom->q[i] = 0.0;
     }
   }
-  if (force->kspace) force->kspace->qsum_qsq();
   double energy_after = energy_full();
   double de = energy_after-energy_before;
   double prob = get_transfer_probability(de,side);

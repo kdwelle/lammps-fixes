@@ -44,6 +44,7 @@ class FixImageCharges : public Fix {
   double pxvalue,pyvalue,pzvalue,nxvalue,nyvalue,nzvalue,scale;
   double energy_stored;
   int varflag,iregion,itype;
+  int exclusionAtom; 
   char *pxstr,*pystr,*pzstr,*nxstr,*nystr,*nzstr;
   char *idregion, *scalestr;
   int pxvar,pyvar,pzvar,nxvar,nyvar,nzvar,scalevar; 

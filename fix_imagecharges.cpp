@@ -156,6 +156,8 @@ FixImageCharges::FixImageCharges(LAMMPS *lmp, int narg, char **arg) :
     } else error->all(FLERR,"Illegal fix imagecharges command"); // not a recognized keyword
   }
 
+  exclusionAtom=-1;
+
   //This fix produces per-atom information
   peratom_flag = 1;
   peratom_freq = 1;
@@ -285,6 +287,12 @@ void FixImageCharges::setup_pre_force(int vflag){
   int nadded = 0;
   int atomIndex = nlocal;
 
+  //initialize
+  for (int i = 0; i < nlocal; i++){
+    imagei[i] = 0;
+    imageid[i] = 0;
+  }
+
 
   // update region if necessary
 
@@ -370,6 +378,7 @@ void FixImageCharges::pre_force(int vflag){
     dlist[i] = 0;
     imList[i] = 0;
     imReqList[i] = 0;
+
   }
 
   // update region if necessary
@@ -430,12 +439,24 @@ void FixImageCharges::pre_force(int vflag){
             for (int k=0; k<3; ++k){
               x[j][k] = r[k];
             }
+            //update type if necessary
+            if(exclusionAtom == i){
+              atom->mask[j] = groupbit;
+            }
           }
           atom->q[j] = -1*scale*q[i]; //update charge
           imagei[i] = j;
           imageid[i] = j;
           imagei[j] = -1;
           imageid[j] = -1;
+        }
+      }else{ //not in group
+        int j = imagei[i];
+        if (j > 0){ //exclusion group atom
+          atom->mask[j] = atom->mask[i];
+          dlist[j] = !dlist[j];
+          reqCount++;
+          exclusionAtom = i;
         }
       }
     }
@@ -452,23 +473,36 @@ void FixImageCharges::pre_force(int vflag){
   }
     fprintf(screen,"\n");
   if (seenCount > reqCount){
-    fprintf(screen,"%s", "in imList: ");
+    fprintf(screen, "flagging to Delete \n");
     toDelete = true;
-    fprintf(screen,"%s", "\n");
   }
 
   if (toDelete){
     int i = 0;
-    while (i<nlocal){
+    while (i<atom->nlocal){
       if (dlist[i]){
         atom -> avec -> copy(nlocal-1, i, 1);
+        imagei[nlocal-1] = 0;
+        imageid[nlocal-1] = 0; //zero these in case used later
         dlist[i] = dlist[nlocal-1];
         atom->nlocal--;
         nadded--;
       } else i++;
     }
-    
+    fprintf(screen,"nadded is now %d \n", nadded);
+    int nchanged = abs(nadded)*2;
+    for(int i=nlocal; i<nlocal+nchanged; ++i){ //zero out the rest if something changed
+      if (i < atom->nmax){
+        imagei[i] = 0;
+        imageid[i] = 0;
+      }else{
+        error->all(FLERR,"Too many total atoms");
+      }
+      
+    }
   }
+
+
 
   if(nadded){
     atom->natoms += nadded;

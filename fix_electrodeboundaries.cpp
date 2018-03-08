@@ -196,9 +196,9 @@ void FixElectrodeBoundaries::pre_exchange(){
     }
 
     int index = is_particle(coords);
-    if (index > -1){
+    if (index > 0){ //hack because image charges messes up when excluded atom is index 0
       //attempt reduction
-      fprintf(screen, "attempt reduction \n");
+      fprintf(screen, "attempt reduction on index %d \n", i);
       attempt_reduction(index, side);
 
     }else{

@@ -211,8 +211,8 @@ void FixElectrodeBoundaries::pre_exchange(){
     }
     
   }
-  fprintf(screen, "Left oxidations: %d / %d \n Right oxidations: %d / %d \n", leftOx, leftOxAttempts, rightOx, rightOxAttempts);
-  fprintf(screen, "Left reductions: %d / %d \n Right reductions: %d / %d \n", leftRed, leftRedAttempts, rightRed, rightRedAttempts);
+  fprintf(screen, "Left oxidations: %d / %d \nRight oxidations: %d / %d \n", leftOx, leftOxAttempts, rightOx, rightOxAttempts);
+  fprintf(screen, "Left reductions: %d / %d \nRight reductions: %d / %d \n", leftRed, leftRedAttempts, rightRed, rightRedAttempts);
 
 }
 

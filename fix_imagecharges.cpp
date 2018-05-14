@@ -504,7 +504,7 @@ void FixImageCharges::pre_force(int vflag){
     fprintf(screen,"nadded is now %d \n", nadded);
 
     nlocal = atom->nlocal;
-    for(int i=nlocal; i<nlocal+nchanged*3; ++i){ //zero out the rest if something changed
+    for(int i=nlocal; i<nlocal*2; ++i){ //zero out the rest if something changed
       if (i < atom->nmax){
         imagei[i] = 0;
         imageid[i] = 0;

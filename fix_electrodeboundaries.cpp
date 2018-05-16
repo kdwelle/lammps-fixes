@@ -198,12 +198,12 @@ void FixElectrodeBoundaries::pre_exchange(){
     int index = is_particle(coords);
     if (index > 0){ //hack because image charges messes up when excluded atom is index 0
       //attempt reduction
-      fprintf(screen, "attempt reduction on index %d \n", index);
+      fprintf(screen, "attempt reduction on index %d, coords: %.2f,%.2f,%.2f \n", index,coords[0],coords[1],coords[2]);
       attempt_reduction(index, side);
 
     }else{
       //attempt oxidation
-      fprintf(screen, "attempt oxidation \n");
+      fprintf(screen, "attempt oxidation at coords: %.2f,%.2f,%.2f \n",coords[0],coords[1],coords[2]);
       attempt_oxidation(coords, side);
 
 
@@ -291,6 +291,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
   // metropolis condition -- greater than because get_transfer probability return p(x) for reduction, oxidation = 1-P(x)
     energy_stored = energy_after;
     (side)? rightOx++ : leftOx++;
+    fprintf(screen, "oxidized at coord: %.2f %.2f %.2f \n", coord[0],coord[1],coord[2]);
   }else{ //not accepted
     int nlocal = atom->nlocal;
     // fprintf(screen, "%s %d %s %d %s", "not accepted, m is ", m, " nlocal is ",nlocal, "\n");
@@ -338,9 +339,10 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
     atom->avec->copy(atom->nlocal-1,i,1);
     atom->nlocal--;
     atom->natoms--;
-    if (atom->map_style) atom->map_init();
+    if (atom->map_style) atom->map_init();  //what does this do?
     side? rightRed++ : leftRed++;
     energy_stored = energy_after;
+    fprintf(screen, "reduced index: %d \n", i);
   } else { //not accepted
     atom->mask[i] = tmpmask;
     if (q_flag) atom->q[i] = q_tmp;

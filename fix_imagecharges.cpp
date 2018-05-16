@@ -404,6 +404,9 @@ void FixImageCharges::pre_force(int vflag){
       int j = imagei[i];
 
       if(j == -1){ // this is an image charge, will get taken care of later or deleted
+        if (x[i][0] > 0){
+          fprintf(screen,"i is %d, j is %d. image charge is in box!!. \n",i,j);
+        }
         dlist[i] = !dlist[i];
         seenCount++;
       }else{
@@ -413,25 +416,34 @@ void FixImageCharges::pre_force(int vflag){
         double delta = 2*(nxvalue/nnorm*pxvalue + nyvalue/nnorm*pyvalue + nzvalue/nnorm*pzvalue);
         double r[3];
         r[0] = x[i][0] - (prefactor-delta)*nxvalue;
+        if (r[0] > 0){
+          fprintf(screen,"i is %d, j is %d. attempting to put image inside box. \n",i,j);
+        }
         r[1] = x[i][1] - (prefactor-delta)*nyvalue;
         r[2] = x[i][2] - (prefactor-delta)*nzvalue;
       
-        if(j == -2 || j==0 || j >= nlocal){ //used to not be in region or is new atom
+        if(j <=0 || j >= nlocal){ //used to not be in region or is new atom
           // probably won't fail even if j was supposed to be zero
           j=atomIndex;
-
           fprintf(screen,"%s %d %s %d %s", "New atom ", i, " gets image ", j, "\n");
           atomIndex++;
           nadded++;
           nchanged++;
           atom->avec->create_atom(itype,r); //add a new atom
           atom->mask[j] = groupbit;
+
+          imagei[i] = j;
+          imageid[i] = j;
+          imagei[j] = -1;
+          imageid[j] = -1;
         
         }else{
-          // mark that we updated/saw this image
+          if (region && !region->match(x[i][0],x[i][1],x[i][2])){
+            fprintf(screen,"ion is not in region, but not image charge! j is %d", j);
+          }
+          // mark that we updated/saw its image
           dlist[j] = !dlist[j];
           reqCount++;
-          
           // update image coordinates
           for (int k=0; k<3; ++k){
             x[j][k] = r[k];
@@ -445,16 +457,14 @@ void FixImageCharges::pre_force(int vflag){
           }
         }
         atom->q[j] = -1*scale*q[i]; //update charge
-        imagei[i] = j;
-        imageid[i] = j;
-        imagei[j] = -1;
-        imageid[j] = -1;
       }
     }else{ //not in group
       int j = imagei[i];
-      if (j > 0){ //exclusion group atom
-        fprintf(screen, "excluded: %d , image: %d \n", i, imagei[i]);
-        atom->mask[j] = atom->mask[i];
+      fprintf(screen,"atom %d is not in group, j is %d \n", i, j);
+      if (j > 0 ){ //exclusion group atom
+        fprintf(screen, "excluded: %d , image: %d \n", i, j);
+        atom->mask[j] = atom->mask[i]; //set group of image to same as atom
+        atom->q[j] = 0.0;                //set charge of image to zero
         fprintf(screen, "changed type of atom: %d to exclude \n", j);
         dlist[j] = !dlist[j];
         reqCount++;
@@ -577,19 +587,21 @@ void FixImageCharges::copy_arrays(int i, int j, int delflag){
   int i1 = imagei[i];
   imagei[j] = imagei[i];
   imageid[j] = imageid[i];
+  bool found;
 
   if (i1 == -1){ //this is an image charge
     for (int x=0; x < atom->nlocal+1; ++x){ //need to loop over empty space at end used for sorting
       if (imagei[x] == i){
         imagei[x] = j; //now points to new location
         imageid[x] = j;
+        found = true;
       }
+    }
+    if (!found){
+      fprintf(screen, "COULDN'T FIND OWNER OF IMAGECHARGE");
     }
   }
 
-  // imageid[j] = imageid[i];
-  // memcpy(&imagei[j], &imagei[i], sizeof(int));
-  // memcpy(&imageid[j], &imageid[i], sizeof(double));
 }
 
 void FixImageCharges::set_arrays(int i){

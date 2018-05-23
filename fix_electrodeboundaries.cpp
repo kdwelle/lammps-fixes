@@ -286,8 +286,8 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
   double energy_after = energy_full();
 
   double de = energy_after-energy_before;
-  double prob = get_transfer_probability(de,side);
-  // fprintf(screen, "%s %f %s %f %s", "energy is ", de, " and prob is ",prob, "\n");
+  double prob = get_transfer_probability(de,side,1);
+  fprintf(screen, "%d energy is %f and prob is %f \n", side, de, prob, "\n");
   if (random_equal->uniform() < prob ){
   // metropolis condition -- greater than because get_transfer probability return p(x) for reduction, oxidation = 1-P(x)
     energy_stored = energy_after;
@@ -333,8 +333,8 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
   }
   double energy_after = energy_full();
   double de = energy_after-energy_before;
-  double prob = get_transfer_probability(de,side);
-  // fprintf(screen, "%s %f %s %f %s", "energy is ", de, " and prob is ",prob, "\n");
+  double prob = get_transfer_probability(de,side,0);
+  fprintf(screen, "%d energy is %f and prob is %f \n", side, de, prob, "\n");
 
   if (random_equal->uniform() < prob) {
     atom->avec->copy(atom->nlocal-1,i,1);
@@ -354,14 +354,18 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
 
 }
 
-float FixElectrodeBoundaries::get_transfer_probability(float dE, int side){
+float FixElectrodeBoundaries::get_transfer_probability(float dE, int side, int redox){
   // get P(x) from madeleung potential
-  // Note for positive ion, madelueng potential = dE because q=+1
-  // this will return oxidation potential, reduction is 1-P(x)
+  // side is 0 for left and 1 for right
+  // redox is 0 for reduction and 1 for oxidation
 
   //TODO: include temperature in this
 
-  float x = dE + v0 + (side*dv);
+  float fermi = v0 + (side*dv);
+  if (redox){ //redox = 1, oxidation
+    fermi = -1*fermi;
+  }
+  float x = dE - fermi;
   return 1/(1+exp(x));
 }
 

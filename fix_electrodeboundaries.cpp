@@ -50,7 +50,7 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   Fix(lmp, narg, arg),
 	idregion(NULL){
 
-  dr = 5.0; //plus/minus search for ion in vicinity
+  dr = 10.0; //plus/minus search for ion in vicinity
   xcut = 2.0; //distance from electrode to check for electrochem
   ncycles = 1; //number of attempts per timestep
   charge = 1;
@@ -294,7 +294,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
     fprintf(screen, "oxidized at coord: %.2f %.2f %.2f \n", coord[0],coord[1],coord[2]);
   }else{ //not accepted
     int nlocal = atom->nlocal;
-    // fprintf(screen, "%s %d %s %d %s", "not accepted, m is ", m, " nlocal is ",nlocal, "\n");
+    fprintf(screen, "%s %d %s %d %s", "not accepted, m is ", m, " nlocal is ",nlocal, "\n");
     
     while (m < atom->nlocal-1){
       atom->natoms--;

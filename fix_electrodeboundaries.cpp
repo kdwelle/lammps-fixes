@@ -73,6 +73,7 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
 
   if (seed <= 0) error->all(FLERR,"Illegal fix electrodeboundaries command -- seed cannot be zero or negative");
 
+  fprintf(screen,"v0 is %f and dv is %f.\n", v0,dv);
 
 	// optional arguments
 	iregion = -1;
@@ -192,7 +193,7 @@ void FixElectrodeBoundaries::pre_exchange(){
 
     }else{ //right side
       coords[0] = xhi - coords[0];
-      side =1;
+      side = 1;
     }
 
     int index = is_particle(coords);
@@ -287,7 +288,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
   double de = energy_after-energy_before;
   double prob = get_transfer_probability(de,side);
   // fprintf(screen, "%s %f %s %f %s", "energy is ", de, " and prob is ",prob, "\n");
-  if (random_equal->uniform() > prob ){
+  if (random_equal->uniform() < prob ){
   // metropolis condition -- greater than because get_transfer probability return p(x) for reduction, oxidation = 1-P(x)
     energy_stored = energy_after;
     (side)? rightOx++ : leftOx++;
@@ -354,13 +355,13 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
 }
 
 float FixElectrodeBoundaries::get_transfer_probability(float dE, int side){
-  //get P(x) from madeleung potential
+  // get P(x) from madeleung potential
   // Note for positive ion, madelueng potential = dE because q=+1
-  //this will return oxidation potential, reduction is 1-P(x)
+  // this will return oxidation potential, reduction is 1-P(x)
 
   //TODO: include temperature in this
 
-  float x = dE + v0 + side*(dv);
+  float x = dE + v0 + (side*dv);
   return 1/(1+exp(x));
 }
 

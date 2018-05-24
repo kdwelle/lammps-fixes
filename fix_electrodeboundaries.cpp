@@ -52,7 +52,7 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
 
   dr = 10.0; //plus/minus search for ion in vicinity
   xcut = 2.0; //distance from electrode to check for electrochem
-  ncycles = 1; //number of attempts per timestep
+  ncycles = 0.1; //number of attempts per timestep
   charge = 1;
   charge_flag = true;
   sigma = sqrt(force->boltz/force->mvv2e);
@@ -180,6 +180,13 @@ void FixElectrodeBoundaries::pre_exchange(){
   zlo = domain->boxlo[2];
   zhi = domain->boxhi[2];
 
+  int numRepeat;
+  if (random_equal->uniform() < ncycles){
+    numRepeat = ceil(ncycles);
+  }else{
+    numRepeat = 0;
+  }
+
   for (int i=0; i<ncycles; ++i){
     coords[0] = random_equal->uniform() * (xcut*2); //only want to sample near electrodes
     coords[1] = ylo + random_equal->uniform() * (yhi-ylo);
@@ -287,7 +294,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
 
   double de = energy_after-energy_before;
   double prob = get_transfer_probability(de,side,1);
-  fprintf(screen, "%d energy is %f and prob is %f \n", side, de, prob, "\n");
+  fprintf(screen, "%d energy is %f and prob is %f \n", side, de, prob);
   if (random_equal->uniform() < prob ){
   // metropolis condition -- greater than because get_transfer probability return p(x) for reduction, oxidation = 1-P(x)
     energy_stored = energy_after;
@@ -334,7 +341,7 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
   double energy_after = energy_full();
   double de = energy_after-energy_before;
   double prob = get_transfer_probability(de,side,0);
-  fprintf(screen, "%d energy is %f and prob is %f \n", side, de, prob, "\n");
+  fprintf(screen, "%d energy is %f and prob is %f \n", side, de, prob);
 
   if (random_equal->uniform() < prob) {
     atom->avec->copy(atom->nlocal-1,i,1);

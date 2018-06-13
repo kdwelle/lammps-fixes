@@ -51,8 +51,8 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
 	idregion(NULL){
 
   dr = 10.0; //plus/minus search for ion in vicinity
-  xcut = 2.0; //distance from electrode to check for electrochem
-  ncycles = 0.1; //number of attempts per timestep
+  xcut = 1.0; //distance from electrode to check for electrochem
+  ncycles = 0.01; //number of attempts per timestep
   charge = 1;
   charge_flag = true;
   sigma = sqrt(force->boltz/force->mvv2e);
@@ -188,13 +188,13 @@ void FixElectrodeBoundaries::pre_exchange(){
   }
 
   for (int i=0; i<ncycles; ++i){
-    coords[0] = random_equal->uniform() * (xcut*2); //only want to sample near electrodes
+    coords[0] = -1/xcut*log(random_equal->uniform()); //exponential distribution centered at xcut
     coords[1] = ylo + random_equal->uniform() * (yhi-ylo);
     coords[2] = zlo + random_equal->uniform() * (zhi-zlo);
 
     //translate coord[0] into x position
     int side;
-    if (coords[0] < xcut){ //left side
+    if (random_equal->uniform() < 0.5){ //left side
       coords[0] = coords[0] + xlo;
       side = 0;
 

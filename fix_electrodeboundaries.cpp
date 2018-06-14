@@ -232,8 +232,8 @@ int FixElectrodeBoundaries::is_particle(double *coords){
   int nlocal = atom->nlocal;
   int *mask = atom->mask;
 
-  float xmin=max(coords[0]-dr, xlo);
-  float xmax=min(coords[0]+dr, xhi);
+  float xmin=max(coords[0]-xcut, xlo);
+  float xmax=min(coords[0]+xcut, xhi);
   float ymin=coords[1]-dr;
   float ymax=coords[1]+dr;
   float zmin=coords[2]-dr;

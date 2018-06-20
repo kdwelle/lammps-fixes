@@ -233,6 +233,11 @@ int FixElectrodeBoundaries::is_particle(double *coords){
   int nlocal = atom->nlocal;
   int *mask = atom->mask;
 
+  int yperiodic = domain->yperiodic;
+  int zperiodic = domain->zperiodic;
+  double ylen = yhi-ylo;
+  double zlen = zhi-zlo;
+
   float xmin=max(coords[0]-xcut, xlo);
   float xmax=min(coords[0]+xcut, xhi);
   float ymin=coords[1]-dr;
@@ -246,10 +251,10 @@ int FixElectrodeBoundaries::is_particle(double *coords){
       if (type[i]==etype){
         if (x[i][0] > xmin){
           if (x[i][0] < xmax){
-            if (x[i][1] > ymin){
-              if (x[i][1] < ymax){
-                if (x[i][2] > zmin){
-                  if (x[i][2] < zmax){
+            if (x[i][1] > ymin || (yperiodic && ymin < ylo && x[i][1] > ymin+ylen)){
+              if (x[i][1] < ymax || (yperiodic && ymax > yhi && x[i][1] < ymax-ylen)){
+                if (x[i][2] > zmin || (zperiodic && zmin < zlo && x[i][2] > zmin+zlen)){
+                  if (x[i][2] < zmax || (zperiodic && zmax > zhi && x[i][2] < zmax-zlen)){
                     return i;
                   }
                 }

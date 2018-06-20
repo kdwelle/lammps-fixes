@@ -45,7 +45,7 @@ class FixElectrodeBoundaries : public Fix {
   double xlo,xhi,dist,v0,dv,sigma,charge;
   double ylo,yhi,zlo,zhi;
   bool charge_flag;
-  double energy_stored,ncycles;
+  double energy_stored,ncycles,pOxidation;
   int exclusion_group;
   int varflag,iregion,etype,seed;
   int leftOx, leftOxAttempts;

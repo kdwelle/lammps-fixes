@@ -50,9 +50,10 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   Fix(lmp, narg, arg),
 	idregion(NULL){
 
-  dr = 10.0; //plus/minus search for ion in vicinity
+  dr = 4.0; //plus/minus search for ion in vicinity
   xcut = 1.0; //distance from electrode to check for electrochem
-  ncycles = 0.01; //number of attempts per timestep
+  ncycles = 0.1; //number of attempts per timestep
+  pOxidation = 0.15; //probability of oxidation vs. reduction
   charge = 1;
   charge_flag = true;
   sigma = sqrt(force->boltz/force->mvv2e);
@@ -203,19 +204,19 @@ void FixElectrodeBoundaries::pre_exchange(){
       side = 1;
     }
 
-    int index = is_particle(coords);
-    if (index > 0){ //hack because image charges messes up when excluded atom is index 0
-      //attempt reduction
-      fprintf(screen, "attempt reduction on index %d, coords: %.2f,%.2f,%.2f \n", index,coords[0],coords[1],coords[2]);
-      attempt_reduction(index, side);
-
-    }else{
-      //attempt oxidation
+    //random chance for reduction vs oxidation
+    if (random_equal->uniform() < pOxidation){
+      //oxidation
       fprintf(screen, "attempt oxidation at coords: %.2f,%.2f,%.2f \n",coords[0],coords[1],coords[2]);
       attempt_oxidation(coords, side);
-
-
-
+    }else{
+      //reduction
+      int index = is_particle(coords);
+      if (index > 0){ //hack because image charges messes up when excluded atom is index 0
+        //attempt reduction
+        fprintf(screen, "attempt reduction on index %d, coords: %.2f,%.2f,%.2f \n", index,coords[0],coords[1],coords[2]);
+        attempt_reduction(index, side);
+      }
     }
     
   }

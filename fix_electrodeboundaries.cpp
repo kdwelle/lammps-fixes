@@ -209,6 +209,9 @@ void FixElectrodeBoundaries::pre_exchange(){
       //oxidation
       fprintf(screen, "attempt oxidation at coords: %.2f,%.2f,%.2f \n",coords[0],coords[1],coords[2]);
       attempt_oxidation(coords, side);
+      fprintf(screen, "Left oxidations: %d / %d \nRight oxidations: %d / %d \n", leftOx, leftOxAttempts, rightOx, rightOxAttempts);
+      fprintf(screen, "Left reductions: %d / %d \nRight reductions: %d / %d \n", leftRed, leftRedAttempts, rightRed, rightRedAttempts);
+
     }else{
       //reduction
       int index = is_particle(coords);
@@ -216,13 +219,14 @@ void FixElectrodeBoundaries::pre_exchange(){
         //attempt reduction
         fprintf(screen, "attempt reduction on index %d, coords: %.2f,%.2f,%.2f \n", index,coords[0],coords[1],coords[2]);
         attempt_reduction(index, side);
+        fprintf(screen, "Left oxidations: %d / %d \nRight oxidations: %d / %d \n", leftOx, leftOxAttempts, rightOx, rightOxAttempts);
+        fprintf(screen, "Left reductions: %d / %d \nRight reductions: %d / %d \n", leftRed, leftRedAttempts, rightRed, rightRedAttempts);
+
       }
     }
     
   }
-  fprintf(screen, "Left oxidations: %d / %d \nRight oxidations: %d / %d \n", leftOx, leftOxAttempts, rightOx, rightOxAttempts);
-  fprintf(screen, "Left reductions: %d / %d \nRight reductions: %d / %d \n", leftRed, leftRedAttempts, rightRed, rightRedAttempts);
-
+  
 }
 
 int FixElectrodeBoundaries::is_particle(double *coords){
@@ -300,7 +304,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
 
   double de = energy_after-energy_before;
   double prob = get_transfer_probability(de,side,1);
-  fprintf(screen, "%d energy is %f and prob is %f \n", side, de, prob);
+  fprintf(screen, "%d %d energy is %f and prob is %f \n", side, 1, de, prob);
   if (random_equal->uniform() < prob ){
   // metropolis condition -- greater than because get_transfer probability return p(x) for reduction, oxidation = 1-P(x)
     energy_stored = energy_after;
@@ -347,7 +351,7 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
   double energy_after = energy_full();
   double de = energy_after-energy_before;
   double prob = get_transfer_probability(de,side,0);
-  fprintf(screen, "%d energy is %f and prob is %f \n", side, de, prob);
+  fprintf(screen, "%d %d energy is %f and prob is %f \n", side, 0, de, prob);
 
   if (random_equal->uniform() < prob) {
     atom->avec->copy(atom->nlocal-1,i,1);

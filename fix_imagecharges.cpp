@@ -477,6 +477,8 @@ void FixImageCharges::pre_force(int vflag){
           fprintf(screen, "unexcluded: %d , image: %d \n", i, imagei[i]);
           mask[j] = groupbit;
         }
+      }else if (j==0){ //new atom
+
       }
     }
   }
@@ -512,6 +514,8 @@ void FixImageCharges::pre_force(int vflag){
       } else i++;
     }
     fprintf(screen,"nadded is now %d \n", nadded);
+    fprintf(screen, "nlocal is %d \n", atom->nlocal);
+
 
     nlocal = atom->nlocal;
     for(int i=nlocal; i<nlocal*2; ++i){ //zero out the rest if something changed

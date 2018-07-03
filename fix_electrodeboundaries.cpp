@@ -277,6 +277,9 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
   side? rightOxAttempts++ : leftOxAttempts++;
 
   double energy_before = energy_stored;
+  double original_energy = energy_stored;
+
+  // Step 1: Check LJ interactions using Boltzmann factors
 
   // add atom
   atom->avec->create_atom(etype,coord);
@@ -284,13 +287,12 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
 
   // add to groups
   // optionally add to type-based groups
+  // don't add charge yet
 
   atom->mask[m] = groupbit;
-
   atom->v[m][0] = random_equal->gaussian()*sigma;
   atom->v[m][1] = random_equal->gaussian()*sigma;
   atom->v[m][2] = random_equal->gaussian()*sigma;
-  if (charge_flag) atom->q[m] = charge;
   modify->create_attribute(m); //what does this do?
 
   atom->natoms++;
@@ -301,16 +303,33 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
   atom->nghost = 0;
 
   double energy_after = energy_full();
-
   double de = energy_after-energy_before;
-  double prob = get_transfer_probability(de,side,1);
-  fprintf(screen, "%d %d energy is %f and prob is %f \n", side, 1, de, prob);
-  if (random_equal->uniform() < prob ){
-  // metropolis condition -- greater than because get_transfer probability return p(x) for reduction, oxidation = 1-P(x)
-    energy_stored = energy_after;
-    (side)? rightOx++ : leftOx++;
-    fprintf(screen, "oxidized at coord: %.2f %.2f %.2f \n", coord[0],coord[1],coord[2]);
-  }else{ //not accepted
+  bool reject = false;
+
+  // TODO: edit so that uses correct kT for non-lj units!
+
+  if(de < 0 || exp(-de) > random_equal->uniform()){ //accept, check electrostatics
+    energy_before = energy_after; // Now want to compare charge and no charge
+    if (charge_flag) atom->q[m] = charge;
+    energy_after = energy_full();
+    de = energy_after-energy_before;
+    double prob = get_transfer_probability(de,side,1);
+    fprintf(screen, "%d %d ct energy is %f and prob is %f \n", side, 1, de, prob);
+    if (random_equal->uniform() < prob ){
+      energy_stored = energy_after;
+      (side)? rightOx++ : leftOx++;
+      fprintf(screen, "oxidized at coord: %.2f %.2f %.2f \n", coord[0],coord[1],coord[2]);
+    }else{  // charge transfer move rejected
+      reject = true;
+      fprintf(screen, "charge transfer move rejected \n");
+    }
+  }else{ // insertion move rejected
+    reject = true;
+    fprintf(screen, "insertion move rejected \n");
+  }
+
+  if (reject){
+    if (charge_flag) atom->q[m] = 0.0;
     int nlocal = atom->nlocal;
     fprintf(screen, "%s %d %s %d %s", "not accepted, m is ", m, " nlocal is ",nlocal, "\n");
     
@@ -318,57 +337,79 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
       atom->natoms--;
       atom->nlocal--;
     }
-
-    // fprintf(screen, "%s %d %s %d %s", "after while loop, m is ", m, " nlocal is ",atom->nlocal, "\n");
     //delete atom
     atom->natoms--;
     atom->nlocal--;
-    // fprintf(screen, "%s %d %s %d %s", "after delete, m is ", m, " nlocal is ",atom->nlocal, "\n");
-    
+
     if (modify->n_pre_force) modify->pre_force(0);
     if (force->kspace) force->kspace->qsum_qsq();
-    energy_stored = energy_before;
+    energy_stored = original_energy;
   }
 
 }
 
 void FixElectrodeBoundaries::attempt_reduction(int i, int side){
   double q_tmp;
-  const int q_flag = atom->q_flag;
+  bool ctAccepted;
 
   side? rightRedAttempts++ : leftRedAttempts++;
   double energy_before = energy_stored;
+  double original_energy = energy_before;
+  double energy_after;
+  double de;
 
-  int tmpmask;
-  if (i >= 0) {
-    tmpmask = atom->mask[i];
-    atom->mask[i] = exclusion_group_bit;
-    if (q_flag) {
-      q_tmp = atom->q[i];
-      atom->q[i] = 0.0;
+  // First, check electrostatics
+  if(charge_flag){
+    q_tmp = atom->q[i];
+    atom->q[i] = 0.0;
+    energy_after = energy_full();
+    de = energy_after-energy_before;
+    double prob = get_transfer_probability(de,side,0);
+
+    fprintf(screen, "%d %d energy is %f and prob is %f \n", side, 0, de, prob);
+
+    if (random_equal->uniform() < prob) {  // check to see if can remove atom
+      ctAccepted = true;
+      energy_before = energy_after;  // no charge is new baseline energy
+    } else{  // charge transfer move rejected
+      fprintf(screen, "charge transfer move rejected \n");
+      atom->q[i] = q_tmp;
+      energy_stored = original_energy;
+    }
+  } else {  // no charge, ct automatically accepted
+    ctAccepted = true;
+  }
+
+  if (ctAccepted){  // check to see if noncharged interactions okay
+    
+    int tmpmask;
+    if (i >= 0) {  // exclude atom
+      tmpmask = atom->mask[i];
+      atom->mask[i] = exclusion_group_bit;
+    }
+    energy_after = energy_full();
+    de = energy_after-energy_before;
+
+    // TODO: edit so that uses correct kT for non-lj units!
+    if(de < 0 || exp(-de) > random_equal->uniform()){ //accept boltzmann and move
+      atom->avec->copy(atom->nlocal-1,i,1);
+      atom->nlocal--;
+      atom->natoms--;
+      if (atom->map_style) atom->map_init();  //what does this do?
+      side? rightRed++ : leftRed++;
+      energy_stored = energy_after;
+      fprintf(screen, "reduced index: %d \n", i);
+
+    } else { //not accepted
+      fprintf(screen, "atomic removal move rejected \n");
+      // reset everything
+      atom->mask[i] = tmpmask;
+      if (charge_flag) atom->q[i] = q_tmp;
+      if (modify->n_pre_force) modify->pre_force(0);
+      if (force->kspace) force->kspace->qsum_qsq();
+      energy_stored = original_energy;
     }
   }
-  double energy_after = energy_full();
-  double de = energy_after-energy_before;
-  double prob = get_transfer_probability(de,side,0);
-  fprintf(screen, "%d %d energy is %f and prob is %f \n", side, 0, de, prob);
-
-  if (random_equal->uniform() < prob) {
-    atom->avec->copy(atom->nlocal-1,i,1);
-    atom->nlocal--;
-    atom->natoms--;
-    if (atom->map_style) atom->map_init();  //what does this do?
-    side? rightRed++ : leftRed++;
-    energy_stored = energy_after;
-    fprintf(screen, "reduced index: %d \n", i);
-  } else { //not accepted
-    atom->mask[i] = tmpmask;
-    if (q_flag) atom->q[i] = q_tmp;
-    if (modify->n_pre_force) modify->pre_force(0);
-    if (force->kspace) force->kspace->qsum_qsq();
-    energy_stored = energy_before;
-  }
-
 }
 
 float FixElectrodeBoundaries::get_transfer_probability(float dE, int side, int redox){
@@ -379,12 +420,14 @@ float FixElectrodeBoundaries::get_transfer_probability(float dE, int side, int r
   //TODO: include temperature in this
 
   float fermi = v0 + (side*dv);
+  float x = dE + fermi;
   if (redox){ //redox = 1, oxidation
-    fermi = -1*fermi;
-  }
-  float x = dE - fermi;
-  return 1/(1+exp(x));
+    return 1 - 1/(1+exp(x));
+  }else{ //reduction
+  	return 1/(1+exp(x));
 }
+  }
+  
 
 
 

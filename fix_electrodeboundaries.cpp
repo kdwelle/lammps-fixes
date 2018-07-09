@@ -53,7 +53,7 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   dr = 4.0; //plus/minus search for ion in vicinity
   xcut = 1.0; //distance from electrode to check for electrochem
   ncycles = 0.1; //number of attempts per timestep
-  pOxidation = 0.15; //probability of oxidation vs. reduction
+  pOxidation = 0.10; //probability of oxidation vs. reduction
   charge = 1;
   charge_flag = true;
   sigma = sqrt(force->boltz/force->mvv2e);
@@ -188,7 +188,7 @@ void FixElectrodeBoundaries::pre_exchange(){
     numRepeat = 0;
   }
 
-  for (int i=0; i<ncycles; ++i){
+  for (int i=0; i<numRepeat; ++i){
     coords[0] = -1/xcut*log(random_equal->uniform()); //exponential distribution centered at xcut
     coords[1] = ylo + random_equal->uniform() * (yhi-ylo);
     coords[2] = zlo + random_equal->uniform() * (zhi-zlo);
@@ -209,9 +209,7 @@ void FixElectrodeBoundaries::pre_exchange(){
       //oxidation
       fprintf(screen, "attempt oxidation at coords: %.2f,%.2f,%.2f \n",coords[0],coords[1],coords[2]);
       attempt_oxidation(coords, side);
-      fprintf(screen, "Left oxidations: %d / %d \nRight oxidations: %d / %d \n", leftOx, leftOxAttempts, rightOx, rightOxAttempts);
-      fprintf(screen, "Left reductions: %d / %d \nRight reductions: %d / %d \n", leftRed, leftRedAttempts, rightRed, rightRedAttempts);
-
+    
     }else{
       //reduction
       int index = is_particle(coords);
@@ -219,13 +217,12 @@ void FixElectrodeBoundaries::pre_exchange(){
         //attempt reduction
         fprintf(screen, "attempt reduction on index %d, coords: %.2f,%.2f,%.2f \n", index,coords[0],coords[1],coords[2]);
         attempt_reduction(index, side);
-        fprintf(screen, "Left oxidations: %d / %d \nRight oxidations: %d / %d \n", leftOx, leftOxAttempts, rightOx, rightOxAttempts);
-        fprintf(screen, "Left reductions: %d / %d \nRight reductions: %d / %d \n", leftRed, leftRedAttempts, rightRed, rightRedAttempts);
-
       }
     }
-    
   }
+
+  fprintf(screen, "Left oxidations: %d / %d \nRight oxidations: %d / %d \n", leftOx, leftOxAttempts, rightOx, rightOxAttempts);
+  fprintf(screen, "Left reductions: %d / %d \nRight reductions: %d / %d \n", leftRed, leftRedAttempts, rightRed, rightRedAttempts);
   
 }
 
@@ -418,15 +415,15 @@ float FixElectrodeBoundaries::get_transfer_probability(float dE, int side, int r
   // redox is 0 for reduction and 1 for oxidation
 
   //TODO: include temperature in this
-
+  float x;
   float fermi = v0 + (side*dv);
-  float x = dE + fermi;
-  if (redox){ //redox = 1, oxidation
-    return 1 - 1/(1+exp(x));
-  }else{ //reduction
-  	return 1/(1+exp(x));
-}
+  if (redox){
+    x = dE + fermi;
+  }else{
+    x = dE - fermi;
   }
+	return 1/(1+exp(x));
+}
   
 
 

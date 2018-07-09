@@ -288,9 +288,9 @@ void FixImageCharges::setup_pre_force(int vflag){
   int atomIndex = nlocal;
 
   //initialize
-  for (int i = 0; i < nlocal; i++){
-    imagei[i] = 0;
-    imageid[i] = 0;
+  for (int i = 0; i < nlocal*4; i++){
+    imagei[i] = -2;
+    imageid[i] = -2;
   }
 
 
@@ -306,8 +306,8 @@ void FixImageCharges::setup_pre_force(int vflag){
     for (int i = 0; i < nlocal; i++)
       if (mask[i] & groupbit) {
         if (region && !region->match(x[i][0],x[i][1],x[i][2])){
-          imagei[i] = -2;
-          imageid[i] = -2;
+          imagei[i] = -3;
+          imageid[i] = -3;
           continue;
         }
         // transform coordinates across plane
@@ -373,9 +373,9 @@ void FixImageCharges::pre_force(int vflag){
   int excludedHere = -1;
 
   bool toDelete = false;
-  int dlist[nlocal]; //list to use as a mask for atoms that need to be deleted
+  int dlist[nlocal+2]; //list to use as a mask for atoms that need to be deleted
 
-  for (int i=0; i<nlocal; i++){ //initialize
+  for (int i=0; i<nlocal+2; i++){ //initialize
     dlist[i] = 0;
   }
 
@@ -389,18 +389,7 @@ void FixImageCharges::pre_force(int vflag){
 
   for (int i = 0; i < nlocal; i++){
     if (mask[i] & groupbit) {
-      // if (region && !region->match(x[i][0],x[i][1],x[i][2])){
-      //   // check to see if there's an existing image charge to be deleted
-      //   if (imagei[i] >= 0) {
-      //       toDelete = true;
-      //       dlist[imagei[i]] = 1;
-      //       nadded--; //got rid of an atom so keep accounting constant
-      //       imagei[i] = -2;
-      //       imageid[i] = -2;
-      //   }
-      //   continue;
-      // }
-      // check to see if an image charge already exists
+
       int j = imagei[i];
 
       if(j == -1){ // this is an image charge, will get taken care of later or deleted
@@ -422,7 +411,7 @@ void FixImageCharges::pre_force(int vflag){
         r[1] = x[i][1] - (prefactor-delta)*nyvalue;
         r[2] = x[i][2] - (prefactor-delta)*nzvalue;
       
-        if(j <=0 || j >= nlocal){ //used to not be in region or is new atom
+        if(j < 0 || j >= nlocal){ //used to not be in region or is new atom
           // probably won't fail even if j was supposed to be zero
           j=atomIndex;
           fprintf(screen,"%s %d %s %d %s", "New atom ", i, " gets image ", j, "\n");
@@ -449,9 +438,8 @@ void FixImageCharges::pre_force(int vflag){
             x[j][k] = r[k];
           }
           //update type if necessary
-          // fprintf(screen, "i is %d, exclusionAtom is %d \n", i, exclusionAtom);
           if(i == exclusionAtom){
-            fprintf(screen, "i = %d updated type of atom: %d \n",i, j);
+            fprintf(screen, "i = %d updated type of image to unexclude: %d \n",i, j);
             atom->mask[j] = groupbit;
             exclusionAtom = -1;
           }
@@ -461,7 +449,7 @@ void FixImageCharges::pre_force(int vflag){
     }else{ //not in group
       int j = imagei[i];
       fprintf(screen,"atom %d is not in group, j is %d \n", i, j);
-      if (j > 0 ){ //exclusion group atom
+      if (j >= 0 ){ //exclusion group atom
         fprintf(screen, "excluded: %d , image: %d \n", i, j);
         atom->mask[j] = atom->mask[i]; //set group of image to same as atom
         atom->q[j] = 0.0;                //set charge of image to zero
@@ -477,7 +465,7 @@ void FixImageCharges::pre_force(int vflag){
           fprintf(screen, "unexcluded: %d , image: %d \n", i, imagei[i]);
           mask[j] = groupbit;
         }
-      }else if (j==0){ //new atom
+      }else if (j == -2){ //new atom
 
       }
     }
@@ -486,18 +474,36 @@ void FixImageCharges::pre_force(int vflag){
   int oldnlocal=nlocal;
   // deal with the deleteList
   nlocal = atom->nlocal;
-  fprintf(screen, "nlocal is %d \n", nlocal);
-  fprintf(screen, "seenCount is %d, reqCount is %d, diff is: \n", seenCount, reqCount);
-  for (int i=0; i<oldnlocal; i++){
-    if (dlist[i]) {
-      fprintf(screen,"%d : %d, ", i, imagei[i]);
-    }
-  }
-    fprintf(screen,"\n");
+  // fprintf(screen, "nlocal is %d \n", nlocal);
+  // fprintf(screen, "seenCount is %d, reqCount is %d, diff is: \n", seenCount, reqCount);
+  // for (int i=0; i<oldnlocal; i++){
+  //   if (dlist[i]) {
+  //     fprintf(screen,"%d : %d, ", i, imagei[i]);
+  //   }
+  // }
+  fprintf(screen,"\n");
   if (seenCount > reqCount){
-    fprintf(screen, "flagging to Delete \n");
+    // fprintf(screen, "flagging to Delete \n");
     toDelete = true;
+  } else if (seenCount != reqCount){
+   error->all(FLERR,"New atom did not get image"); 
   }
+
+  // if need to delete 0, then need to make sure to swap with a non-image first, then 
+  // continue deletion
+  // if (dlist[0]){
+  //   int n = 1;
+  //   while (imagei[n] == -1){
+  //     n++;  // find a non-image
+  //   }
+  //   fprintf(screen,"found a non-image %d with image %d \n", n, imagei[n]);
+  //   atom -> avec -> copy(n, 0, 1);  //copy n into slot zero
+  //   imagei[n] = 0;
+  //   imageid[n] = 0; //zero these in case used later
+  //   dlist[0] = dlist[n];
+  //   dlist[n] = 1;   // want to delete old copy now
+  // }
+  
 
   if (toDelete){
     int i = 0;
@@ -505,29 +511,27 @@ void FixImageCharges::pre_force(int vflag){
       if (dlist[i]){
         int endInd = atom->nlocal-1;
         atom -> avec -> copy(endInd, i, 1);
-        imagei[endInd] = 0;
-        imageid[endInd] = 0; //zero these in case used later
+        imagei[endInd] = -2;
+        imageid[endInd] = -2; //zero these in case used later
         dlist[i] = dlist[endInd];
         atom->nlocal--;
         nadded--;
         nchanged++;
       } else i++;
     }
-    fprintf(screen,"nadded is now %d \n", nadded);
-    fprintf(screen, "nlocal is %d \n", atom->nlocal);
-
-
-    nlocal = atom->nlocal;
-    for(int i=nlocal; i<nlocal*2; ++i){ //zero out the rest if something changed
-      if (i < atom->nmax){
-        imagei[i] = 0;
-        imageid[i] = 0;
-      }else{
-        error->all(FLERR,"Too many total atoms");
-      }
-    }
+    // fprintf(screen,"nadded is now %d \n", nadded);
+    // fprintf(screen, "nlocal is %d \n", atom->nlocal);
   }
 
+  nlocal = atom->nlocal;
+  for(int i=nlocal; i<nlocal*2; ++i){ //zero out the unused parts of arrays
+    if (i < atom->nmax){
+      imagei[i] = -2;
+      imageid[i] = -2;
+    }else{
+      error->all(FLERR,"Too many total atoms");
+    }
+  }
 
 
   if(nadded){
@@ -591,7 +595,7 @@ void FixImageCharges::copy_arrays(int i, int j, int delflag){
   int i1 = imagei[i];
   imagei[j] = imagei[i];
   imageid[j] = imageid[i];
-  bool found;
+  bool found = false;
 
   if (i1 == -1){ //this is an image charge
     for (int x=0; x < atom->nlocal+1; ++x){ //need to loop over empty space at end used for sorting
@@ -599,6 +603,7 @@ void FixImageCharges::copy_arrays(int i, int j, int delflag){
         imagei[x] = j; //now points to new location
         imageid[x] = j;
         found = true;
+        break;
       }
     }
     if (!found){
@@ -609,6 +614,6 @@ void FixImageCharges::copy_arrays(int i, int j, int delflag){
 }
 
 void FixImageCharges::set_arrays(int i){
-  memset(&imagei[i], 0, sizeof(int));
-  memset(&imageid[i], 0, sizeof(int));
+  memset(&imagei[i], -2, sizeof(int));
+  memset(&imageid[i], -2, sizeof(int));
 }

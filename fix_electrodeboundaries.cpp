@@ -50,9 +50,9 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   Fix(lmp, narg, arg),
 	idregion(NULL){
 
-  dr = 4.0; //plus/minus search for ion in vicinity
-  xcut = 1.0; //distance from electrode to check for electrochem
-  ncycles = 0.1; //number of attempts per timestep
+  dr = 2.0; //plus/minus search for ion in vicinity
+  xcut = 0.5; //distance from electrode to check for electrochem
+  ncycles = 1; //number of attempts per timestep
   pOxidation = 0.10; //probability of oxidation vs. reduction
   charge = 1;
   charge_flag = true;
@@ -418,9 +418,9 @@ float FixElectrodeBoundaries::get_transfer_probability(float dE, int side, int r
   float x;
   float fermi = v0 + (side*dv);
   if (redox){
-    x = dE + fermi;
+    x = dE - fermi; // oxidation
   }else{
-    x = dE - fermi;
+    x = dE + fermi;
   }
 	return 1/(1+exp(x));
 }

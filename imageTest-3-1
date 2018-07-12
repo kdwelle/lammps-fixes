@@ -1,0 +1,80 @@
+## #Example file to test the image charges + electrode fixes
+
+########################
+#     PARAMETERS       #
+########################
+
+variable    slx equal 200
+variable    slx1 equal 198
+variable    sly equal 20
+variable    slz equal 20
+
+variable    rho equal 0.001
+variable    t equal 10.0
+variable    rc equal 2.5 
+variable    lrc equal 10       #long-range cutoff
+
+
+########################
+#    System Setup      #
+########################
+
+units		    lj                       # use reduced units
+dimension	    3                        # 3D simulation
+atom_style	    charge                   # basic properies + charge
+neigh_modify	delay 0 every 1          # pairwise neighbor lists will be delayed until 0 steps since last build and will be built every 1 steps
+boundary        p p p 
+
+region          simbox block -${slx} ${slx} 0 ${sly} 0 ${slz} units box
+create_box      5 simbox                 # create box with 4 atom types in region "simbox"
+
+########################
+#    active system     #
+########################
+
+lattice         bcc ${rho}               # define a cubic bcc lattie with reduced density "rho"
+region          active block 2 ${slx1} 0 ${sly} 0 ${slz} units box
+create_atoms    1 random $(v_rho*v_slx*v_sly*v_slz) 3332 active          # create cations
+create_atoms    2 random $(v_rho*v_slx*v_sly*v_slz) 6729 active
+group           active region active
+group  		forImages region active
+lattice         bcc 1.0
+
+########################
+#    atom settings     #
+########################
+
+kspace_style    pppm 1.0e-4
+pair_style      lj/cut/coul/long ${rc} ${lrc}           # cutoff LJ with long-range coulomb interactions
+#pair_style      lj/cut/coul/cut ${rc} ${lrc}
+
+set             type 1 charge 1
+set             type 2 charge -1
+
+dielectric      1.0
+pair_coeff      * * 1 1                  # set all atoms to have LJ coeffiencents of epsilon=1 and sigma=1
+
+mass            * 1.0                    # set all atom-types' mass to 1 unit
+velocity        all create $t 25076      # set all velocities to be pulled from an ensemble 
+
+######################################
+#    Simulation Parameters/fixes     #
+######################################w
+
+fix             1 active wall/lj93 xlo 0 1 1 2.5 units box pbc yes
+fix             2 active wall/lj93 xhi ${slx} 1 1 2.5 units box pbc yes
+
+fix             3 forImages nve                # run micorcanonical ensemble      
+fix	        4 forImages langevin $t $t 0.1 6729  # Use a langevan thermostat 
+fix             5 forImages imagecharges 0 0 0 1 0 0 3 scale 1
+fix             7 forImages electrodeboundaries 1 ${slx1} -4.0 5.0 1 28000
+
+
+minimize        1.0e-4 1.0e-6 100 1000
+
+reset_timestep  0                        # set the timestep counter to zero
+
+dump             3 forImages custom 100  dumpOut-3-1 id type q x y z fx fy fz f_5
+run    1000000
+
+

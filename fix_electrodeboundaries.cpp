@@ -48,7 +48,7 @@ using namespace FixConst;
 
 FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg) :
   Fix(lmp, narg, arg),
-	idregion(NULL){
+  idregion(NULL){
 
   dr = 2.0; //plus/minus search for ion in vicinity
   xcut = 0.5; //distance from electrode to check for electrochem
@@ -74,14 +74,14 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
 
   if (seed <= 0) error->all(FLERR,"Illegal fix electrodeboundaries command -- seed cannot be zero or negative");
 
-  fprintf(screen,"v0 is %f and dv is %f.\n", v0,dv);
+  // fprintf(screen,"v0 is %f and dv is %f.\n", v0,dv);
 
-	// optional arguments
-	iregion = -1;
-	idregion = NULL;
+  // optional arguments
+  iregion = -1;
+  idregion = NULL;
 
-	int iarg = 9;	//start after madatory arguments
-	while (iarg < narg) {
+  int iarg = 9; //start after madatory arguments
+  while (iarg < narg) {
     if (strcmp(arg[iarg],"region") == 0) { //keyword = region
       error->all(FLERR,"fix electrodeboundaries does not support regions");
     iarg += 2;
@@ -101,7 +101,7 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   // random number generator, same for all procs
   random_equal = new RanPark(lmp,seed);
 
-	atom->add_callback(0);
+  atom->add_callback(0);
 
 }
 
@@ -207,7 +207,7 @@ void FixElectrodeBoundaries::pre_exchange(){
     //random chance for reduction vs oxidation
     if (random_equal->uniform() < pOxidation){
       //oxidation
-      fprintf(screen, "attempt oxidation at coords: %.2f,%.2f,%.2f \n",coords[0],coords[1],coords[2]);
+      // fprintf(screen, "attempt oxidation at coords: %.2f,%.2f,%.2f \n",coords[0],coords[1],coords[2]);
       attempt_oxidation(coords, side);
     
     }else{
@@ -215,14 +215,14 @@ void FixElectrodeBoundaries::pre_exchange(){
       int index = is_particle(coords);
       if (index > 0){ //hack because image charges messes up when excluded atom is index 0
         //attempt reduction
-        fprintf(screen, "attempt reduction on index %d, coords: %.2f,%.2f,%.2f \n", index,coords[0],coords[1],coords[2]);
+        // fprintf(screen, "attempt reduction on index %d, coords: %.2f,%.2f,%.2f \n", index,coords[0],coords[1],coords[2]);
         attempt_reduction(index, side);
       }
     }
   }
 
-  fprintf(screen, "Left oxidations: %d / %d \nRight oxidations: %d / %d \n", leftOx, leftOxAttempts, rightOx, rightOxAttempts);
-  fprintf(screen, "Left reductions: %d / %d \nRight reductions: %d / %d \n", leftRed, leftRedAttempts, rightRed, rightRedAttempts);
+  // fprintf(screen, "Left oxidations: %d / %d \nRight oxidations: %d / %d \n", leftOx, leftOxAttempts, rightOx, rightOxAttempts);
+  // fprintf(screen, "Left reductions: %d / %d \nRight reductions: %d / %d \n", leftRed, leftRedAttempts, rightRed, rightRedAttempts);
   
 }
 
@@ -311,24 +311,24 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
     energy_after = energy_full();
     de = energy_after-energy_before;
     double prob = get_transfer_probability(de,side,1);
-    fprintf(screen, "%d %d ct energy is %f and prob is %f \n", side, 1, de, prob);
+    // fprintf(screen, "%d %d ct energy is %f and prob is %f \n", side, 1, de, prob);
     if (random_equal->uniform() < prob ){
       energy_stored = energy_after;
       (side)? rightOx++ : leftOx++;
-      fprintf(screen, "oxidized at coord: %.2f %.2f %.2f \n", coord[0],coord[1],coord[2]);
+      // fprintf(screen, "oxidized at coord: %.2f %.2f %.2f \n", coord[0],coord[1],coord[2]);
     }else{  // charge transfer move rejected
       reject = true;
-      fprintf(screen, "charge transfer move rejected \n");
+      // fprintf(screen, "charge transfer move rejected \n");
     }
   }else{ // insertion move rejected
     reject = true;
-    fprintf(screen, "insertion move rejected \n");
+    // fprintf(screen, "insertion move rejected \n");
   }
 
   if (reject){
     if (charge_flag) atom->q[m] = 0.0;
     int nlocal = atom->nlocal;
-    fprintf(screen, "%s %d %s %d %s", "not accepted, m is ", m, " nlocal is ",nlocal, "\n");
+    // fprintf(screen, "%s %d %s %d %s", "not accepted, m is ", m, " nlocal is ",nlocal, "\n");
     
     while (m < atom->nlocal-1){
       atom->natoms--;
@@ -369,7 +369,7 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
       ctAccepted = true;
       energy_before = energy_after;  // no charge is new baseline energy
     } else{  // charge transfer move rejected
-      fprintf(screen, "charge transfer move rejected \n");
+      // fprintf(screen, "charge transfer move rejected \n");
       atom->q[i] = q_tmp;
       energy_stored = original_energy;
     }
@@ -395,10 +395,10 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
       if (atom->map_style) atom->map_init();  //what does this do?
       side? rightRed++ : leftRed++;
       energy_stored = energy_after;
-      fprintf(screen, "reduced index: %d \n", i);
+      // fprintf(screen, "reduced index: %d \n", i);
 
     } else { //not accepted
-      fprintf(screen, "atomic removal move rejected \n");
+      // fprintf(screen, "atomic removal move rejected \n");
       // reset everything
       atom->mask[i] = tmpmask;
       if (charge_flag) atom->q[i] = q_tmp;
@@ -422,7 +422,7 @@ float FixElectrodeBoundaries::get_transfer_probability(float dE, int side, int r
   }else{
     x = dE + fermi;
   }
-	return 1/(1+exp(x));
+  return 1/(1+exp(x));
 }
   
 
@@ -471,3 +471,30 @@ double FixElectrodeBoundaries::energy_full()
 
   return total_energy;
 }
+
+/* ----------------------------------------------------------------------
+   return stats about oxidized and reduced atoms
+------------------------------------------------------------------------- */
+
+double FixEfield::compute_vector(int n){
+  //n=  0 --> Left Ox
+  //    1 --> Left Red
+  //    2 --> Right Ox
+  //    3 --> Right Red
+  //    4 --> Left Ox Attemps
+  //    5 --> Left Red Attemps
+  //    6 --> Right Ox Attemps
+  //    7 --> Right Red Attemps
+  
+  switch (n){
+    case 0: return leftOx;
+    case 1: return leftRed;
+    case 2: return rightOx;
+    case 3: return rightRed;
+    case 4: return leftOxAttempts;
+    case 5: return leftRedAttempts;
+    case 6: return rightOxAttempts;
+    case 7: return rightRedAttempts;
+  }
+}
+

@@ -394,7 +394,7 @@ void FixImageCharges::pre_force(int vflag){
 
       if(j == -1){ // this is an image charge, will get taken care of later or deleted
         if (x[i][0] > 0){
-          fprintf(screen,"i is %d, j is %d. image charge is in box!!. \n",i,j);
+          // fprintf(screen,"i is %d, j is %d. image charge is in box!!. \n",i,j);
         }
         dlist[i] = !dlist[i];
         seenCount++;
@@ -406,7 +406,7 @@ void FixImageCharges::pre_force(int vflag){
         double r[3];
         r[0] = x[i][0] - (prefactor-delta)*nxvalue;
         if (r[0] > 0){
-          fprintf(screen,"i is %d, j is %d. attempting to put image inside box. \n",i,j);
+          // fprintf(screen,"i is %d, j is %d. attempting to put image inside box. \n",i,j);
         }
         r[1] = x[i][1] - (prefactor-delta)*nyvalue;
         r[2] = x[i][2] - (prefactor-delta)*nzvalue;
@@ -414,7 +414,7 @@ void FixImageCharges::pre_force(int vflag){
         if(j < 0 || j >= nlocal){ //used to not be in region or is new atom
           // probably won't fail even if j was supposed to be zero
           j=atomIndex;
-          fprintf(screen,"%s %d %s %d %s", "New atom ", i, " gets image ", j, "\n");
+          // fprintf(screen,"%s %d %s %d %s", "New atom ", i, " gets image ", j, "\n");
           atomIndex++;
           nadded++;
           nchanged++;
@@ -428,7 +428,7 @@ void FixImageCharges::pre_force(int vflag){
         
         }else{
           if (region && !region->match(x[i][0],x[i][1],x[i][2])){
-            fprintf(screen,"ion is not in region, but not image charge! j is %d", j);
+            // fprintf(screen,"ion is not in region, but not image charge! j is %d", j);
           }
           // mark that we updated/saw its image
           dlist[j] = !dlist[j];
@@ -439,7 +439,7 @@ void FixImageCharges::pre_force(int vflag){
           }
           //update type if necessary
           if(i == exclusionAtom){
-            fprintf(screen, "i = %d updated type of image to unexclude: %d \n",i, j);
+            // fprintf(screen, "i = %d updated type of image to unexclude: %d \n",i, j);
             atom->mask[j] = groupbit;
             exclusionAtom = -1;
           }
@@ -448,12 +448,12 @@ void FixImageCharges::pre_force(int vflag){
       }
     }else{ //not in group
       int j = imagei[i];
-      fprintf(screen,"atom %d is not in group, j is %d \n", i, j);
+      // fprintf(screen,"atom %d is not in group, j is %d \n", i, j);
       if (j >= 0 ){ //exclusion group atom
-        fprintf(screen, "excluded: %d , image: %d \n", i, j);
+        // fprintf(screen, "excluded: %d , image: %d \n", i, j);
         atom->mask[j] = atom->mask[i]; //set group of image to same as atom
         atom->q[j] = 0.0;                //set charge of image to zero
-        fprintf(screen, "changed type of atom: %d to exclude \n", j);
+        // fprintf(screen, "changed type of atom: %d to exclude \n", j);
         dlist[j] = !dlist[j];
         reqCount++;
         exclusionAtom = i;
@@ -462,7 +462,7 @@ void FixImageCharges::pre_force(int vflag){
         dlist[i] = !dlist[i];
         seenCount++;
         if(i != excludedHere){ //just excluded image charge
-          fprintf(screen, "unexcluded: %d , image: %d \n", i, imagei[i]);
+          // fprintf(screen, "unexcluded: %d , image: %d \n", i, imagei[i]);
           mask[j] = groupbit;
         }
       }else if (j == -2){ //new atom
@@ -481,7 +481,7 @@ void FixImageCharges::pre_force(int vflag){
   //     fprintf(screen,"%d : %d, ", i, imagei[i]);
   //   }
   // }
-  fprintf(screen,"\n");
+  // fprintf(screen,"\n");
   if (seenCount > reqCount){
     // fprintf(screen, "flagging to Delete \n");
     toDelete = true;

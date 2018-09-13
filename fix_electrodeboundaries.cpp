@@ -102,6 +102,8 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   random_equal = new RanPark(lmp,seed);
 
   atom->add_callback(0);
+  vector_flag = 1;
+  size_vector = 8;
 
 }
 
@@ -363,7 +365,7 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
     de = energy_after-energy_before;
     double prob = get_transfer_probability(de,side,0);
 
-    fprintf(screen, "%d %d energy is %f and prob is %f \n", side, 0, de, prob);
+    // fprintf(screen, "%d %d energy is %f and prob is %f \n", side, 0, de, prob);
 
     if (random_equal->uniform() < prob) {  // check to see if can remove atom
       ctAccepted = true;
@@ -476,7 +478,7 @@ double FixElectrodeBoundaries::energy_full()
    return stats about oxidized and reduced atoms
 ------------------------------------------------------------------------- */
 
-double FixEfield::compute_vector(int n){
+double FixElectrodeBoundaries::compute_vector(int n){
   //n=  0 --> Left Ox
   //    1 --> Left Red
   //    2 --> Right Ox

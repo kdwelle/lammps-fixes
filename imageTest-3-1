@@ -4,8 +4,8 @@
 #     PARAMETERS       #
 ########################
 
-variable    slx equal 200
-variable    slx1 equal 198
+variable    slx equal 20
+variable    slx1 equal 18
 variable    sly equal 20
 variable    slz equal 20
 
@@ -65,7 +65,7 @@ fix             1 active wall/lj93 xlo 0 1 1 2.5 units box pbc yes
 fix             2 active wall/lj93 xhi ${slx} 1 1 2.5 units box pbc yes
 
 fix             3 forImages nve                # run micorcanonical ensemble      
-fix	        4 forImages langevin $t $t 0.1 6729  # Use a langevan thermostat 
+fix	            4 forImages langevin $t $t 0.1 6729  # Use a langevan thermostat 
 fix             5 forImages imagecharges 0 0 0 1 0 0 3 scale 1
 fix             7 forImages electrodeboundaries 1 ${slx1} -4.0 5.0 1 28000
 
@@ -75,6 +75,12 @@ minimize        1.0e-4 1.0e-6 100 1000
 reset_timestep  0                        # set the timestep counter to zero
 
 dump             3 forImages custom 100  dumpOut-3-1 id type q x y z fx fy fz f_5
-run    1000000
+variable r1 equal f_7[1]
+variable r2 equal f_7[2]
+variable r3 equal f_7[3]
+variable r4 equal f_7[4]
+fix 8 all print 100 "${r1} ${r2} ${r3} ${r4}" file redox.out screen no title "# LeftOx LeftRed RightOx RightRed"
+
+run    10000
 
 

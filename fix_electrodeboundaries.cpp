@@ -422,7 +422,7 @@ float FixElectrodeBoundaries::get_transfer_probability(float dE, int side, int r
   if (redox){
     x = dE - fermi; // oxidation
   }else{
-    x = dE + fermi;
+    x = dE + fermi; //fermi - (-dE) = 1-P(ox)
   }
   return 1/(1+exp(x));
 }

@@ -607,7 +607,7 @@ void FixImageCharges::copy_arrays(int i, int j, int delflag){
       }
     }
     if (!found){
-      fprintf(screen, "COULDN'T FIND OWNER OF IMAGECHARGE");
+      // fprintf(screen, "COULDN'T FIND OWNER OF IMAGECHARGE");
     }
   }
 

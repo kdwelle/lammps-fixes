@@ -84,8 +84,11 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   while (iarg < narg) {
     if (strcmp(arg[iarg],"region") == 0) { //keyword = region
       error->all(FLERR,"fix electrodeboundaries does not support regions");
-    iarg += 2;
-    } else error->all(FLERR,"Illegal fix electrodeboundaries command"); // not a recognized keyword
+    }
+    else if (strcmp(arg[iarg],"ncycles") == 0) { //keyword = ncycles
+      ncycles = force->numeric(FLERR,arg[iarg+1]);
+      iarg += 2;
+    }else error->all(FLERR,"Illegal fix electrodeboundaries command"); // not a recognized keyword
   }
 
   // zero out counters
@@ -313,7 +316,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
     energy_after = energy_full();
     de = energy_after-energy_before;
     double prob = get_transfer_probability(de,side,1);
-    // fprintf(screen, "%d %d ct energy is %f and prob is %f \n", side, 1, de, prob);
+    fprintf(screen, "%d %d energy is %f prob is %f \n", side, 1, de, prob);
     if (random_equal->uniform() < prob ){
       energy_stored = energy_after;
       (side)? rightOx++ : leftOx++;
@@ -365,7 +368,7 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
     de = energy_after-energy_before;
     double prob = get_transfer_probability(de,side,0);
 
-    // fprintf(screen, "%d %d energy is %f and prob is %f \n", side, 0, de, prob);
+    fprintf(screen, "%d %d energy is %f prob is %f \n", side, 0, de, prob);
 
     if (random_equal->uniform() < prob) {  // check to see if can remove atom
       ctAccepted = true;

@@ -189,6 +189,7 @@ void FixElectrodeBoundaries::pre_exchange(){
   int numRepeat;
   if (random_equal->uniform() < ncycles){
     numRepeat = ceil(ncycles);
+    energy_stored = energy_full();
   }else{
     numRepeat = 0;
   }
@@ -380,6 +381,7 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
     }
   } else {  // no charge, ct automatically accepted
     ctAccepted = true;
+    fprintf(screen, "no charge on this reduction ion");
   }
 
   if (ctAccepted){  // check to see if noncharged interactions okay

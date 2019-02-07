@@ -182,11 +182,13 @@ FixImageCharges::~FixImageCharges(){
   atom->delete_callback(id,0);
 }
 
-int FixImageCharges::setmask()
-{
+int FixImageCharges::setmask(){
   int mask = 0;
   mask |= PRE_FORCE;
+  mask |= MIN_PRE_FORCE;
   mask |= POST_FORCE;
+  mask |= MIN_POST_FORCE;
+  mask |= POST_RUN;
   return mask;
 }
 
@@ -275,6 +277,11 @@ void FixImageCharges::init(){
 
 }
 
+void FixImageCharges::min_setup_pre_force(int vflag){
+  setup_pre_force(vflag);
+
+}
+
 void FixImageCharges::setup_pre_force(int vflag){
   // add the image charges as new atoms
   // todo: will probably have to link images to atoms at some point
@@ -352,6 +359,10 @@ void FixImageCharges::setup_pre_force(int vflag){
   // exclusion_group = group->find(group_arg);
   // std::fprintf(screen, "%s %d %s", "exclusion_bit is: ", exclusion_group, "\n");
 
+}
+
+void FixImageCharges::min_pre_force(int vflag){
+  pre_force(vflag);
 }
 
 void FixImageCharges::pre_force(int vflag){
@@ -488,23 +499,7 @@ void FixImageCharges::pre_force(int vflag){
   } else if (seenCount != reqCount){
    error->all(FLERR,"New atom did not get image"); 
   }
-
-  // if need to delete 0, then need to make sure to swap with a non-image first, then 
-  // continue deletion
-  // if (dlist[0]){
-  //   int n = 1;
-  //   while (imagei[n] == -1){
-  //     n++;  // find a non-image
-  //   }
-  //   fprintf(screen,"found a non-image %d with image %d \n", n, imagei[n]);
-  //   atom -> avec -> copy(n, 0, 1);  //copy n into slot zero
-  //   imagei[n] = 0;
-  //   imageid[n] = 0; //zero these in case used later
-  //   dlist[0] = dlist[n];
-  //   dlist[n] = 1;   // want to delete old copy now
-  // }
   
-
   if (toDelete){
     int i = 0;
     while (i<atom->nlocal){
@@ -533,7 +528,6 @@ void FixImageCharges::pre_force(int vflag){
     }
   }
 
-
   if(nadded){
     atom->natoms += nadded;
     if (atom->natoms < 0)
@@ -545,6 +539,10 @@ void FixImageCharges::pre_force(int vflag){
       atom->map_set();
     }
   }
+}
+
+void FixImageCharges::min_post_force(int vflag){
+  post_force(vflag);
 }
 
 void FixImageCharges::post_force(int vflag){
@@ -576,6 +574,44 @@ void FixImageCharges::post_force(int vflag){
     }
   }
 
+}
+
+void FixImageCharges::post_run(){
+  // delete all the image charges created by this fix. This leaves the system in the same state we found it in
+  // without this cannot e.g. run for 1000 then change field and run again--will result in duplicate images
+  AtomVec *avec = atom->avec;
+  int *mask = atom->mask;
+  int nlocal = atom->nlocal;
+  bool toDelete = false;
+  int dlist[nlocal]; //list to use as a mask for atoms that need to be deleted
+  //initialize dlist
+  for (int i=0; i<nlocal; i++){ //initialize
+    dlist[i] = 0;
+  }
+
+  //loop over local atoms and find image charges
+  for (int i = 0; i < nlocal; i++){
+    if (mask[i] & groupbit) {
+      if(imagei[i] == -1){
+        dlist[i]=1;
+      }
+    }
+  }
+
+  //TODO: add image charges to dlist
+
+  // delete local atoms flagged in dlist
+  // reset nlocal
+  int i = 0;
+  while (i < nlocal) {
+    if (dlist[i]) {
+      avec->copy(nlocal-1,i,1);
+      dlist[i] = dlist[nlocal-1];
+      nlocal--;
+    } else i++;
+  }
+    
+  atom->nlocal = nlocal;
 }
 
 double FixImageCharges::memory_usage(){

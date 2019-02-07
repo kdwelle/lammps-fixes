@@ -30,9 +30,13 @@ class FixImageCharges : public Fix {
   virtual ~FixImageCharges();
   int setmask();
   virtual void init();
+  void min_setup_pre_force(int);
   void setup_pre_force(int);
+  void min_pre_force(int);
   void pre_force(int);
+  void min_post_force(int); 
   void post_force(int);
+  void post_run();
 
   double memory_usage();
   void grow_arrays(int);

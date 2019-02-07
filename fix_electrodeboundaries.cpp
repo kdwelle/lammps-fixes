@@ -54,7 +54,7 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   xcut = 0.5; //distance from electrode to check for electrochem
   ncycles = 1; //number of attempts per timestep
   pOxidation = 0.10; //probability of oxidation vs. reduction
-  charge = 1;
+  charge = 1.0;
   charge_flag = true;
   sigma = sqrt(force->boltz/force->mvv2e);
 
@@ -352,7 +352,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
 }
 
 void FixElectrodeBoundaries::attempt_reduction(int i, int side){
-  double q_tmp;
+  double q_tmp=0;
   bool ctAccepted;
 
   side? rightRedAttempts++ : leftRedAttempts++;

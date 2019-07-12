@@ -71,7 +71,7 @@ class FixElectrodeBoundaries : public Fix {
   //internal subroutines
   int is_particle(double*,int);
   void attempt_oxidation(double*, int);
-  void attempt_reduction(double*, int);
+  void attempt_reduction(int, int);
   void remove_atom(int);
 
   float get_transfer_probability(float, int, int);

@@ -89,7 +89,7 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
     }
     else if (strcmp(arg[iarg],"intercalation") == 0) { //keyword = intercalation true/false neutralIndex
       intercalation = force->numeric(FLERR,arg[iarg+1]); // if -1 then use no redox couple
-      neutralIndex = force->numeric(FLERR,arg[iarg+2])
+      neutralIndex = force->numeric(FLERR,arg[iarg+2]);
       iarg += 3;
     }else error->all(FLERR,"Illegal fix electrodeboundaries command"); // not a recognized keyword
   }
@@ -140,7 +140,7 @@ void FixElectrodeBoundaries::init(){
 
   // create a new group for interaction exclusions
   // used for attempted atom or molecule deletions
-  if intercalation{ //only needed if doind deletions
+  if (intercalation){ //only needed if doind deletions
   if (!exclusion_group_bit) {
     char **group_arg = new char*[4];
 
@@ -292,7 +292,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
   bool reject = false;
 
   // Step 1: Check LJ interactions using Boltzmann factors if intercaltion
-  if intercalation {
+  if (intercalation) {
     if (neutralIndex == -1){
       // add atom
       atom->avec->create_atom(etype,coord);
@@ -314,7 +314,9 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
       atom->nghost = 0;
     } else {
       //find an unused neutral atom
-      for (int i=0; i<nlocal; ++i){
+      int *type = atom->type;
+      int *mask = atom->mask;
+      for (int i=0; i < atom->nlocal; ++i){
         if(mask[i] & groupbit){
           if (type[i]==neutralIndex){
             m=i;
@@ -330,9 +332,9 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
 
   } else { //search for a redox couple
     m = is_particle(coord,neutralIndex);
-    if m = -1{
+    if (m == -1){
       reject = true;
-      de = inf;
+      de = 10000;
     }else{
       de = 0;
     }
@@ -418,7 +420,7 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
   }
 
   if (ctAccepted){  // check to see if noncharged interactions okay
-    if intercalation{ //only need to check for short-range interactions if intercalation
+    if (intercalation){ //only need to check for short-range interactions if intercalation
       int tmpmask;
       if (i >= 0) {  // exclude atom
         tmpmask = atom->mask[i];
@@ -429,7 +431,7 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
 
       // TODO: edit so that uses correct kT for non-lj units!
       if(de < 0 || exp(-de) > random_equal->uniform()){ //accept boltzmann and move
-          hide_atom(i);
+          remove_atom(i);
         if (atom->map_style) atom->map_init();  //what does this do?
         side? rightRed++ : leftRed++;
         energy_stored = energy_after;
@@ -446,13 +448,13 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
       }
     }else{
       side? rightRed++ : leftRed++;
-      hide_atom(i); //no check needed for redox couple, we already checked charge
+      remove_atom(i); //no check needed for redox couple, we already checked charge
     }
   }
 }
 
-void FixElectrodeBoundaries::hide_atom(int i){
-  if neutralIndex == -1{ //no neutral atoms or hidden atom group, just delete it
+void FixElectrodeBoundaries::remove_atom(int i){
+  if (neutralIndex == -1){ //no neutral atoms or hidden atom group, just delete it
     atom->avec->copy(atom->nlocal-1,i,1);
     atom->nlocal--;
     atom->natoms--;

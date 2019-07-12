@@ -45,9 +45,9 @@ class FixElectrodeBoundaries : public Fix {
  protected: 
   double xlo,xhi,dist,v0,dv,sigma,charge;
   double ylo,yhi,zlo,zhi;
-  bool charge_flag;
+  bool charge_flag, intercalation;
   double energy_stored,ncycles,pOxidation;
-  int exclusion_group;
+  int exclusion_group, neutralIndex;
   int varflag,iregion,etype,seed;
   int leftOx, leftOxAttempts;
   int leftRed, leftRedAttempts;
@@ -69,9 +69,11 @@ class FixElectrodeBoundaries : public Fix {
   class Compute *c_pe;
 
   //internal subroutines
-  int is_particle(double*);
+  int is_particle(double*,int);
   void attempt_oxidation(double*, int);
-  void attempt_reduction(int, int);
+  void attempt_reduction(double*, int);
+  void remove_atom(int);
+
   float get_transfer_probability(float, int, int);
   double energy_full();
 

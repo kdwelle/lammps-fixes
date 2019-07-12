@@ -61,9 +61,6 @@ class FixImageCharges : public Fix {
   int force_flag;
   int nlevels_respa,ilevel_respa; 
 
-
-  
-
   int maxatom;
   double **sforce;
 };

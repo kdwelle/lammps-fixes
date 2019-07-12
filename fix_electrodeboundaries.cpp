@@ -37,9 +37,6 @@
 #include "update.h"
 
 
-
-
-
 using namespace std;
 using namespace LAMMPS_NS;
 using namespace FixConst;
@@ -57,6 +54,7 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   charge = 1.0;
   charge_flag = true;
   sigma = sqrt(force->boltz/force->mvv2e);
+  intercalation = true; //default is to add/remove ions when reduce/oxidized
 
 
   if (narg < 8) error->all(FLERR,"Illegal fix electrodeboundaries command -- not enough arguments");
@@ -85,9 +83,14 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
     if (strcmp(arg[iarg],"region") == 0) { //keyword = region
       error->all(FLERR,"fix electrodeboundaries does not support regions");
     }
-    else if (strcmp(arg[iarg],"ncycles") == 0) { //keyword = ncycles
+    else if (strcmp(arg[iarg],"ncycles") == 0) { //keyword = ncycles 
       ncycles = force->numeric(FLERR,arg[iarg+1]);
       iarg += 2;
+    }
+    else if (strcmp(arg[iarg],"intercalation") == 0) { //keyword = intercalation true/false neutralIndex
+      intercalation = force->numeric(FLERR,arg[iarg+1]); // if -1 then use no redox couple
+      neutralIndex = force->numeric(FLERR,arg[iarg+2])
+      iarg += 3;
     }else error->all(FLERR,"Illegal fix electrodeboundaries command"); // not a recognized keyword
   }
 
@@ -137,6 +140,7 @@ void FixElectrodeBoundaries::init(){
 
   // create a new group for interaction exclusions
   // used for attempted atom or molecule deletions
+  if intercalation{ //only needed if doind deletions
   if (!exclusion_group_bit) {
     char **group_arg = new char*[4];
 
@@ -165,6 +169,7 @@ void FixElectrodeBoundaries::init(){
     delete [] group_arg[0];
     delete [] group_arg;
     delete [] arg;
+  }
   }
 
   char *id_pe = (char *) "thermo_pe";
@@ -218,7 +223,7 @@ void FixElectrodeBoundaries::pre_exchange(){
     
     }else{
       //reduction
-      int index = is_particle(coords);
+      int index = is_particle(coords,etype);
       if (index > 0){ //hack because image charges messes up when excluded atom is index 0
         //attempt reduction
         // fprintf(screen, "attempt reduction on index %d, coords: %.2f,%.2f,%.2f \n", index,coords[0],coords[1],coords[2]);
@@ -232,7 +237,7 @@ void FixElectrodeBoundaries::pre_exchange(){
   
 }
 
-int FixElectrodeBoundaries::is_particle(double *coords){
+int FixElectrodeBoundaries::is_particle(double *coords, int typeI){
   // checks to see if there is a particle within dr of coords
   // returns the index of the atom or -1 if not found
   double **x = atom->x;
@@ -255,7 +260,7 @@ int FixElectrodeBoundaries::is_particle(double *coords){
   //probably going to be very slow -- oh well let's try it
   for (int i=0; i<nlocal; ++i){
     if(mask[i] & groupbit){
-      if (type[i]==etype){
+      if (type[i]==typeI){
         if (x[i][0] > xmin){
           if (x[i][0] < xmax){
             if (x[i][1] > ymin || (yperiodic && ymin < ylo && x[i][1] > ymin+ylen)){
@@ -281,36 +286,59 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
 
   double energy_before = energy_stored;
   double original_energy = energy_stored;
-
-  // Step 1: Check LJ interactions using Boltzmann factors
-
-  // add atom
-  atom->avec->create_atom(etype,coord);
-  int m = atom->nlocal - 1; //This is -1 because it's after atom was created
-
-  // add to groups
-  // optionally add to type-based groups
-  // don't add charge yet
-
-  atom->mask[m] = groupbit;
-  atom->v[m][0] = random_equal->gaussian()*sigma;
-  atom->v[m][1] = random_equal->gaussian()*sigma;
-  atom->v[m][2] = random_equal->gaussian()*sigma;
-  modify->create_attribute(m); //what does this do?
-
-  atom->natoms++;
-  if (atom->tag_enable) {
-    atom->tag_extend();
-    if (atom->map_style) atom->map_init();
-  }
-  atom->nghost = 0;
-
-  double energy_after = energy_full();
-  double de = energy_after-energy_before;
+  int m;
+  double energy_after;
+  double de;
   bool reject = false;
 
-  // TODO: edit so that uses correct kT for non-lj units!
+  // Step 1: Check LJ interactions using Boltzmann factors if intercaltion
+  if intercalation {
+    if (neutralIndex == -1){
+      // add atom
+      atom->avec->create_atom(etype,coord);
+      m = atom->nlocal - 1; //This is -1 because it's after atom was created
+      // add to groups
+      // optionally add to type-based groups
+      // don't add charge yet
+      atom->mask[m] = groupbit;
+      atom->v[m][0] = random_equal->gaussian()*sigma;
+      atom->v[m][1] = random_equal->gaussian()*sigma;
+      atom->v[m][2] = random_equal->gaussian()*sigma;
+      modify->create_attribute(m); //what does this do?
 
+      atom->natoms++;
+      if (atom->tag_enable) {
+        atom->tag_extend();
+        if (atom->map_style) atom->map_init();
+      }
+      atom->nghost = 0;
+    } else {
+      //find an unused neutral atom
+      for (int i=0; i<nlocal; ++i){
+        if(mask[i] & groupbit){
+          if (type[i]==neutralIndex){
+            m=i;
+            break;
+          }
+        }
+      }
+      atom->type[m] = etype;
+      atom->q[m] = 0;
+    }
+    energy_after = energy_full();
+    de = energy_after-energy_before;
+
+  } else { //search for a redox couple
+    m = is_particle(coord,neutralIndex);
+    if m = -1{
+      reject = true;
+      de = inf;
+    }else{
+      de = 0;
+    }
+  }
+
+  // TODO: edit so that uses correct kT for non-lj units!
   if(de < 0 || exp(-de) > random_equal->uniform()){ //accept, check electrostatics
     energy_before = energy_after; // Now want to compare charge and no charge
     if (charge_flag) atom->q[m] = charge;
@@ -333,16 +361,21 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
 
   if (reject){
     if (charge_flag) atom->q[m] = 0.0;
-    int nlocal = atom->nlocal;
-    // fprintf(screen, "%s %d %s %d %s", "not accepted, m is ", m, " nlocal is ",nlocal, "\n");
     
-    while (m < atom->nlocal-1){
+    if (neutralIndex == -1) {
+      int nlocal = atom->nlocal;
+      // fprintf(screen, "%s %d %s %d %s", "not accepted, m is ", m, " nlocal is ",nlocal, "\n");
+      
+      while (m < atom->nlocal-1){
+        atom->natoms--;
+        atom->nlocal--;
+      }
+      //delete atom
       atom->natoms--;
       atom->nlocal--;
+    } else {
+      atom->type[m] = neutralIndex;
     }
-    //delete atom
-    atom->natoms--;
-    atom->nlocal--;
 
     if (modify->n_pre_force) modify->pre_force(0);
     if (force->kspace) force->kspace->qsum_qsq();
@@ -385,35 +418,46 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
   }
 
   if (ctAccepted){  // check to see if noncharged interactions okay
-    
-    int tmpmask;
-    if (i >= 0) {  // exclude atom
-      tmpmask = atom->mask[i];
-      atom->mask[i] = exclusion_group_bit;
-    }
-    energy_after = energy_full();
-    de = energy_after-energy_before;
+    if intercalation{ //only need to check for short-range interactions if intercalation
+      int tmpmask;
+      if (i >= 0) {  // exclude atom
+        tmpmask = atom->mask[i];
+        atom->mask[i] = exclusion_group_bit;
+      }
+      energy_after = energy_full();
+      de = energy_after-energy_before;
 
-    // TODO: edit so that uses correct kT for non-lj units!
-    if(de < 0 || exp(-de) > random_equal->uniform()){ //accept boltzmann and move
-      atom->avec->copy(atom->nlocal-1,i,1);
-      atom->nlocal--;
-      atom->natoms--;
-      if (atom->map_style) atom->map_init();  //what does this do?
+      // TODO: edit so that uses correct kT for non-lj units!
+      if(de < 0 || exp(-de) > random_equal->uniform()){ //accept boltzmann and move
+          hide_atom(i);
+        if (atom->map_style) atom->map_init();  //what does this do?
+        side? rightRed++ : leftRed++;
+        energy_stored = energy_after;
+        // fprintf(screen, "reduced index: %d \n", i);
+
+      } else { //not accepted
+        // fprintf(screen, "atomic removal move rejected \n");
+        // reset everything
+        atom->mask[i] = tmpmask;
+        if (charge_flag) atom->q[i] = q_tmp;
+        if (modify->n_pre_force) modify->pre_force(0);
+        if (force->kspace) force->kspace->qsum_qsq();
+        energy_stored = original_energy;
+      }
+    }else{
       side? rightRed++ : leftRed++;
-      energy_stored = energy_after;
-      // fprintf(screen, "reduced index: %d \n", i);
-
-    } else { //not accepted
-      // fprintf(screen, "atomic removal move rejected \n");
-      // reset everything
-      atom->mask[i] = tmpmask;
-      if (charge_flag) atom->q[i] = q_tmp;
-      if (modify->n_pre_force) modify->pre_force(0);
-      if (force->kspace) force->kspace->qsum_qsq();
-      energy_stored = original_energy;
+      hide_atom(i); //no check needed for redox couple, we already checked charge
     }
   }
+}
+
+void FixElectrodeBoundaries::hide_atom(int i){
+  if neutralIndex == -1{ //no neutral atoms or hidden atom group, just delete it
+    atom->avec->copy(atom->nlocal-1,i,1);
+    atom->nlocal--;
+    atom->natoms--;
+  }
+  atom->type[i] = neutralIndex; //else turn it into the neutral species
 }
 
 float FixElectrodeBoundaries::get_transfer_probability(float dE, int side, int redox){
@@ -432,8 +476,6 @@ float FixElectrodeBoundaries::get_transfer_probability(float dE, int side, int r
   return 1/(1+exp(x));
 }
   
-
-
 
 
 /* ----------------------------------------------------------------------

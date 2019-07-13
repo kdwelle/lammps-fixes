@@ -55,6 +55,7 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   charge_flag = true;
   sigma = sqrt(force->boltz/force->mvv2e);
   intercalation = true; //default is to add/remove ions when reduce/oxidized
+  neutralIndex = -1;
 
 
   if (narg < 8) error->all(FLERR,"Illegal fix electrodeboundaries command -- not enough arguments");
@@ -88,9 +89,9 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
       iarg += 2;
     }
     else if (strcmp(arg[iarg],"intercalation") == 0) { //keyword = intercalation true/false neutralIndex
-      intercalation = force->numeric(FLERR,arg[iarg+1]); // if -1 then use no redox couple
-      neutralIndex = force->numeric(FLERR,arg[iarg+2]);
-      iarg += 3;
+      intercalation = true; // if -1 then use no redox couple
+      neutralIndex = force->numeric(FLERR,arg[iarg+1]);
+      iarg += 2;
     }else error->all(FLERR,"Illegal fix electrodeboundaries command"); // not a recognized keyword
   }
 
@@ -326,6 +327,8 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
       }
       atom->type[m] = etype;
       atom->q[m] = 0;
+      atom->mask[m] = groupbit;
+      atom->x[m] = coord;
     }
     energy_after = energy_full();
     de = energy_after-energy_before;

@@ -58,6 +58,8 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   sigma = sqrt(force->boltz/force->mvv2e);
   intercalation = true; //default is to add/remove ions when reduce/oxidized
   neutralIndex = -1;
+  porusLeft = false;
+  porusRight = false;
 
 
   if (narg < 8) error->all(FLERR,"Illegal fix electrodeboundaries command -- not enough arguments");
@@ -93,6 +95,14 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
     else if (strcmp(arg[iarg],"intercalation") == 0) { //keyword = intercalation true/false neutralIndex
       intercalation = true; // if -1 then use no redox couple
       neutralIndex = force->numeric(FLERR,arg[iarg+1]);
+      iarg += 2;
+    }else if (strcmp(arg[iarg],"porusLeft") == 0){ //keyword = porus ; triggers a porus electrode framework
+      porusLeft = true;
+      xstart = force->numeric(FLERR,arg[iarg+1]);
+      iarg += 2;
+    }else if (strcmp(arg[iarg],"porusRight") == 0){ //keyword = porus ; triggers a porus electrode framework
+      porusRight = true;
+      xend = force->numeric(FLERR,arg[iarg+1]);
       iarg += 2;
     }else error->all(FLERR,"Illegal fix electrodeboundaries command"); // not a recognized keyword
   }
@@ -179,7 +189,6 @@ void FixElectrodeBoundaries::init(){
   int ipe = modify->find_compute(id_pe);
   c_pe = modify->compute[ipe];
 
-
 }
 
 void FixElectrodeBoundaries::pre_exchange(){
@@ -203,25 +212,17 @@ void FixElectrodeBoundaries::pre_exchange(){
   }
 
   for (int i=0; i<numRepeat; ++i){
-    coords[0] = -1/xcut*log(random_equal->uniform()); //exponential distribution centered at xcut
+    
+    int side = (random_equal->uniform() > 0.5);
+    // left = 0, right = 1;
+    coords[0] = getx(side)
     coords[1] = ylo + random_equal->uniform() * (yhi-ylo);
     coords[2] = zlo + random_equal->uniform() * (zhi-zlo);
-
-    //translate coord[0] into x position
-    int side;
-    if (random_equal->uniform() < 0.5){ //left side
-      coords[0] = coords[0] + xlo;
-      side = 0;
-
-    }else{ //right side
-      coords[0] = xhi - coords[0];
-      side = 1;
-    }
 
     //random chance for reduction vs oxidation
     if (random_equal->uniform() < pOxidation){
       //oxidation
-      // fprintf(screen, "attempt oxidation at coords: %.2f,%.2f,%.2f \n",coords[0],coords[1],coords[2]);
+      fprintf(screen, "attempt oxidation at coords: %.2f,%.2f,%.2f \n",coords[0],coords[1],coords[2]);
       attempt_oxidation(coords, side);
     
     }else{
@@ -229,7 +230,7 @@ void FixElectrodeBoundaries::pre_exchange(){
       int index = is_particle(coords,etype);
       if (index > 0){ //hack because image charges messes up when excluded atom is index 0
         //attempt reduction
-        // fprintf(screen, "attempt reduction on index %d, coords: %.2f,%.2f,%.2f \n", index,coords[0],coords[1],coords[2]);
+        fprintf(screen, "attempt reduction on index %d, coords: %.2f,%.2f,%.2f \n", index,coords[0],coords[1],coords[2]);
         attempt_reduction(index, side);
       }
     }
@@ -238,6 +239,27 @@ void FixElectrodeBoundaries::pre_exchange(){
   // fprintf(screen, "Left oxidations: %d / %d \nRight oxidations: %d / %d \n", leftOx, leftOxAttempts, rightOx, rightOxAttempts);
   // fprintf(screen, "Left reductions: %d / %d \nRight reductions: %d / %d \n", leftRed, leftRedAttempts, rightRed, rightRedAttempts);
   
+}
+
+float FixElectrodeBoundaries::get_x(int side){
+  // function that determines the x-coordinate of the oxidation/reduction
+  if (side){ //right
+    if (porusRight){
+      return xstart + ((xhi - xstart)*random_equal->uniform());
+    }else{
+      float xtemp = -1/xcut*log(random_equal->uniform()); //exponential distribution centered at xcut
+      return xhi - xtemp;
+    }
+
+  }else{ //left
+    if (porusLeft){
+      return xlo + ((xend-xlo)*random_equal->uniform());
+    }else{
+      float xtemp = -1/xcut*log(random_equal->uniform()); //exponential distribution centered at xcut
+      return xtemp + xlo;
+    }
+  }
+
 }
 
 int FixElectrodeBoundaries::is_particle(double *coords, int typeI){

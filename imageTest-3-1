@@ -71,7 +71,7 @@ fix             2 active wall/harmonic xhi ${slx} 1 1 2.5 units box pbc yes
 
 fix             3 forImages nve                # run micorcanonical ensemble      
 fix	            4 forImages langevin $t $t 0.1 6960  # Use a langevan thermostat 
-fix             5 forImages electrodeboundaries 1 ${slx1} -5.0 5.0 1 21414 intercalation 3 ncycles 5
+fix             5 forImages electrodeboundaries 1 ${slx1} -5.0 5.0 1 21414 ncycles 5
 fix             6 forImages efield -6.5 0 0 
 fix             7 forImages imagecharges 0 0 0 1 0 0 4 scale 1
 fix             10 neutralIgnore setforce 0 0 0 

@@ -92,8 +92,8 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
       ncycles = force->numeric(FLERR,arg[iarg+1]);
       iarg += 2;
     }
-    else if (strcmp(arg[iarg],"intercalation") == 0) { //keyword = intercalation true/false neutralIndex
-      intercalation = true; // if -1 then use no redox couple
+    else if (strcmp(arg[iarg],"couple") == 0) { //keyword = intercalation true/false neutralIndex
+      intercalation = false; // if -1 then use no redox couple
       neutralIndex = force->numeric(FLERR,arg[iarg+1]);
       iarg += 2;
     }else if (strcmp(arg[iarg],"porusLeft") == 0){ //keyword = porus ; triggers a porus electrode framework
@@ -340,7 +340,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
         if (atom->map_style) atom->map_init();
       }
       atom->nghost = 0;
-      
+
     } else {
       //find an unused neutral atom
       int *type = atom->type;
@@ -396,11 +396,11 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
       fprintf(screen, "oxidized at coord: %.2f %.2f %.2f \n", atom->x[m][0],atom->x[m][1],atom->x[m][2]);
     }else{  // charge transfer move rejected
       reject = true;
-      // fprintf(screen, "charge transfer move rejected \n");
+      fprintf(screen, "charge transfer move rejected \n");
     }
   }else{ // insertion move rejected
     reject = true;
-    // fprintf(screen, "insertion move rejected \n");
+    fprintf(screen, "insertion move rejected \n");
   }
 
   if (reject){
@@ -408,7 +408,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
     
     if (neutralIndex == -1) {
       int nlocal = atom->nlocal;
-      // fprintf(screen, "%s %d %s %d %s", "not accepted, m is ", m, " nlocal is ",nlocal, "\n");
+      fprintf(screen, "%s %d %s %d %s", "not accepted, m is ", m, " nlocal is ",nlocal, "\n");
       
       while (m < atom->nlocal-1){
         atom->natoms--;
@@ -433,7 +433,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
 
 void FixElectrodeBoundaries::attempt_reduction(int i, int side){
   double q_tmp=0;
-  bool ctAccepted;
+  bool ctAccepted = false;
 
   side? rightRedAttempts++ : leftRedAttempts++;
   double energy_before = energy_stored;
@@ -455,7 +455,8 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
       ctAccepted = true;
       energy_before = energy_after;  // no charge is new baseline energy
     } else{  // charge transfer move rejected
-      // fprintf(screen, "charge transfer move rejected \n");
+      ctAccepted = false;
+      fprintf(screen, "charge transfer move rejected \n");
       atom->q[i] = q_tmp;
       energy_stored = original_energy;
     }
@@ -481,10 +482,10 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
         if (atom->map_style) atom->map_init();  //what does this do?
         side? rightRed++ : leftRed++;
         energy_stored = energy_after;
-        // fprintf(screen, "reduced index: %d \n", i);
+        fprintf(screen, "reduced index: %d \n", i);
 
       } else { //not accepted
-        // fprintf(screen, "atomic removal move rejected \n");
+        fprintf(screen, "atomic removal move rejected \n");
         // reset everything
         atom->mask[i] = tmpmask;
         if (charge_flag) atom->q[i] = q_tmp;
@@ -504,9 +505,13 @@ void FixElectrodeBoundaries::remove_atom(int i){
     atom->avec->copy(atom->nlocal-1,i,1);
     atom->nlocal--;
     atom->natoms--;
+    if (modify->n_pre_force) modify->pre_force(0);
+    if (force->kspace) force->kspace->qsum_qsq();
+  }else{
+    atom->type[i] = neutralIndex; //else turn it into the neutral species
+    if (modify->n_pre_force) modify->pre_force(0);
+    if (force->kspace) force->kspace->qsum_qsq(); 
   }
-  atom->type[i] = neutralIndex; //else turn it into the neutral species
-
 }
 
 float FixElectrodeBoundaries::get_transfer_probability(float dE, int side, int redox){

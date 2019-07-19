@@ -459,12 +459,12 @@ void FixImageCharges::pre_force(int vflag){
       }
     }else{ //not in group
       int j = imagei[i];
-      // fprintf(screen,"atom %d is not in group, j is %d \n", i, j);
+      fprintf(screen,"atom %d is not in group, j is %d \n", i, j);
       if (j >= 0 ){ //exclusion group atom
-        // fprintf(screen, "excluded: %d , image: %d \n", i, j);
+        fprintf(screen, "excluded: %d , image: %d \n", i, j);
         atom->mask[j] = atom->mask[i]; //set group of image to same as atom
         atom->q[j] = 0.0;                //set charge of image to zero
-        // fprintf(screen, "changed type of atom: %d to exclude \n", j);
+        fprintf(screen, "changed type of atom: %d to exclude \n", j);
         dlist[j] = !dlist[j];
         reqCount++;
         exclusionAtom = i;
@@ -473,7 +473,7 @@ void FixImageCharges::pre_force(int vflag){
         dlist[i] = !dlist[i];
         seenCount++;
         if(i != excludedHere){ //just excluded image charge
-          // fprintf(screen, "unexcluded: %d , image: %d \n", i, imagei[i]);
+          fprintf(screen, "unexcluded: %d , image: %d \n", i, imagei[i]);
           mask[j] = groupbit;
         }
       }else if (j == -2){ //new atom
@@ -494,7 +494,7 @@ void FixImageCharges::pre_force(int vflag){
   // }
   // fprintf(screen,"\n");
   if (seenCount > reqCount){
-    // fprintf(screen, "flagging to Delete \n");
+    fprintf(screen, "flagging to Delete \n");
     toDelete = true;
   } else if (seenCount != reqCount){
    error->all(FLERR,"New atom did not get image"); 
@@ -514,8 +514,8 @@ void FixImageCharges::pre_force(int vflag){
         nchanged++;
       } else i++;
     }
-    // fprintf(screen,"nadded is now %d \n", nadded);
-    // fprintf(screen, "nlocal is %d \n", atom->nlocal);
+    fprintf(screen,"nadded is now %d \n", nadded);
+    fprintf(screen, "nlocal is %d \n", atom->nlocal);
   }
 
   nlocal = atom->nlocal;
@@ -643,7 +643,7 @@ void FixImageCharges::copy_arrays(int i, int j, int delflag){
       }
     }
     if (!found){
-      // fprintf(screen, "COULDN'T FIND OWNER OF IMAGECHARGE");
+      fprintf(screen, "COULDN'T FIND OWNER OF IMAGECHARGE");
     }
   }
 

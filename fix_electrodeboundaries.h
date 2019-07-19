@@ -73,6 +73,7 @@ class FixElectrodeBoundaries : public Fix {
   void attempt_oxidation(double*, int);
   void attempt_reduction(int, int);
   void remove_atom(int);
+  float get_x(int);
 
   float get_transfer_probability(float, int, int);
   double energy_full();

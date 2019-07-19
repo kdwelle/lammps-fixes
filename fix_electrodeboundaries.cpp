@@ -50,7 +50,7 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   idregion(NULL){
 
   dr = 2.0; //plus/minus search for ion in vicinity
-  xcut = 0.5; //distance from electrode to check for electrochem
+  xcut = 0.5; //mean distance from electrode to check for electrochem
   ncycles = 1; //number of attempts per timestep
   pOxidation = 0.10; //probability of oxidation vs. reduction
   charge = 1.0;
@@ -98,11 +98,11 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
       iarg += 2;
     }else if (strcmp(arg[iarg],"porusLeft") == 0){ //keyword = porus ; triggers a porus electrode framework
       porusLeft = true;
-      xstart = force->numeric(FLERR,arg[iarg+1]);
+      xend = force->numeric(FLERR,arg[iarg+1]);
       iarg += 2;
     }else if (strcmp(arg[iarg],"porusRight") == 0){ //keyword = porus ; triggers a porus electrode framework
       porusRight = true;
-      xend = force->numeric(FLERR,arg[iarg+1]);
+      xstart = force->numeric(FLERR,arg[iarg+1]);
       iarg += 2;
     }else error->all(FLERR,"Illegal fix electrodeboundaries command"); // not a recognized keyword
   }
@@ -215,7 +215,7 @@ void FixElectrodeBoundaries::pre_exchange(){
     
     int side = (random_equal->uniform() > 0.5);
     // left = 0, right = 1;
-    coords[0] = getx(side)
+    coords[0] = get_x(side);
     coords[1] = ylo + random_equal->uniform() * (yhi-ylo);
     coords[2] = zlo + random_equal->uniform() * (zhi-zlo);
 
@@ -247,7 +247,7 @@ float FixElectrodeBoundaries::get_x(int side){
     if (porusRight){
       return xstart + ((xhi - xstart)*random_equal->uniform());
     }else{
-      float xtemp = -1/xcut*log(random_equal->uniform()); //exponential distribution centered at xcut
+      float xtemp = -1*xcut*log(random_equal->uniform()); //exponential distribution centered at xcut
       return xhi - xtemp;
     }
 
@@ -255,7 +255,7 @@ float FixElectrodeBoundaries::get_x(int side){
     if (porusLeft){
       return xlo + ((xend-xlo)*random_equal->uniform());
     }else{
-      float xtemp = -1/xcut*log(random_equal->uniform()); //exponential distribution centered at xcut
+      float xtemp = -1*xcut*log(random_equal->uniform()); //exponential distribution centered at xcut
       return xtemp + xlo;
     }
   }
@@ -315,6 +315,9 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
   double energy_after;
   double de;
   bool reject = false;
+  bool found = false;
+  int oldmask;
+  double* oldcoords;
 
   // Step 1: Check LJ interactions using Boltzmann factors if intercaltion
   if (intercalation) {
@@ -329,7 +332,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
       atom->v[m][0] = random_equal->gaussian()*sigma;
       atom->v[m][1] = random_equal->gaussian()*sigma;
       atom->v[m][2] = random_equal->gaussian()*sigma;
-      modify->create_attribute(m); //what does this do?
+      modify->create_attribute(m); //what does this do? --> adds it to be modified by this fix
 
       atom->natoms++;
       if (atom->tag_enable) {
@@ -337,22 +340,34 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
         if (atom->map_style) atom->map_init();
       }
       atom->nghost = 0;
+      
     } else {
       //find an unused neutral atom
       int *type = atom->type;
       int *mask = atom->mask;
+
       for (int i=0; i < atom->nlocal; ++i){
         if(mask[i] & groupbit){
           if (type[i]==neutralIndex){
             m=i;
+            found = true;
             break;
           }
         }
       }
-      atom->type[m] = etype;
-      atom->q[m] = 0;
-      atom->mask[m] = groupbit;
-      atom->x[m] = coord;
+      if (found){
+        atom->type[m] = etype;
+        atom->q[m] = 0;
+        // oldmask = atom->mask[m];
+        // atom->mask[m] = groupbit;
+        oldcoords = atom->x[m];
+        atom->x[m] = coord;
+        // atom->v[m][0] = random_equal->gaussian()*sigma;
+        // atom->v[m][1] = random_equal->gaussian()*sigma;
+        // atom->v[m][2] = random_equal->gaussian()*sigma;
+      } else{
+        reject = true;
+      }
     }
     energy_after = energy_full();
     de = energy_after-energy_before;
@@ -378,7 +393,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
     if (random_equal->uniform() < prob ){
       energy_stored = energy_after;
       (side)? rightOx++ : leftOx++;
-      // fprintf(screen, "oxidized at coord: %.2f %.2f %.2f \n", coord[0],coord[1],coord[2]);
+      fprintf(screen, "oxidized at coord: %.2f %.2f %.2f \n", atom->x[m][0],atom->x[m][1],atom->x[m][2]);
     }else{  // charge transfer move rejected
       reject = true;
       // fprintf(screen, "charge transfer move rejected \n");
@@ -402,8 +417,11 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
       //delete atom
       atom->natoms--;
       atom->nlocal--;
-    } else {
+    
+    } else if (found){
+      // atom->mask[m] = oldmask;
       atom->type[m] = neutralIndex;
+      atom->x[m] = oldcoords;
     }
 
     if (modify->n_pre_force) modify->pre_force(0);
@@ -458,7 +476,8 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
 
       // TODO: edit so that uses correct kT for non-lj units!
       if(de < 0 || exp(-de) > random_equal->uniform()){ //accept boltzmann and move
-          remove_atom(i);
+        atom->mask[i] = tmpmask;
+        remove_atom(i);
         if (atom->map_style) atom->map_init();  //what does this do?
         side? rightRed++ : leftRed++;
         energy_stored = energy_after;
@@ -487,6 +506,7 @@ void FixElectrodeBoundaries::remove_atom(int i){
     atom->natoms--;
   }
   atom->type[i] = neutralIndex; //else turn it into the neutral species
+
 }
 
 float FixElectrodeBoundaries::get_transfer_probability(float dE, int side, int redox){

@@ -60,6 +60,7 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   neutralIndex = -1;
   porusLeft = false;
   porusRight = false;
+  overpotential = 0;
 
 
   if (narg < 8) error->all(FLERR,"Illegal fix electrodeboundaries command -- not enough arguments");
@@ -104,7 +105,10 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
       porusRight = true;
       xstart = force->numeric(FLERR,arg[iarg+1]);
       iarg += 2;
-    }else error->all(FLERR,"Illegal fix electrodeboundaries command"); // not a recognized keyword
+    }else if (strcmp(arg[iarg],"overpotential") == 0){ //keyword = overpotential ; adds a term to the de before prob. compute
+      overpotential = force->numeric(FLERR,arg[iarg+1]);
+      iarg += 2;
+  	}else error->all(FLERR,"Illegal fix electrodeboundaries command"); // not a recognized keyword
   }
 
   // zero out counters
@@ -527,6 +531,7 @@ float FixElectrodeBoundaries::get_transfer_probability(float dE, int side, int r
   }else{
     x = dE + fermi; //fermi - (-dE) = 1-P(ox)
   }
+  x = x+overpotential;
   return 1/(1+exp(x));
 }
   

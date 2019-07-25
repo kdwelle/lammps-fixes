@@ -48,7 +48,7 @@ class FixElectrodeBoundaries : public Fix {
   bool charge_flag, intercalation, porusLeft,porusRight;
   double energy_stored,ncycles,pOxidation, xstart, xend;
   int exclusion_group, neutralIndex;
-  int varflag,iregion,etype,seed;
+  int varflag,iregion,etype,seed,overpotential;
   int leftOx, leftOxAttempts;
   int leftRed, leftRedAttempts;
   int rightOx, rightOxAttempts;

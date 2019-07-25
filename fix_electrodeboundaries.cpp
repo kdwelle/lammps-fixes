@@ -222,7 +222,7 @@ void FixElectrodeBoundaries::pre_exchange(){
     //random chance for reduction vs oxidation
     if (random_equal->uniform() < pOxidation){
       //oxidation
-      fprintf(screen, "attempt oxidation at coords: %.2f,%.2f,%.2f \n",coords[0],coords[1],coords[2]);
+      fprintf(screen, "oxidation, %.2f,%.2f,%.2f ",coords[0],coords[1],coords[2]);
       attempt_oxidation(coords, side);
     
     }else{
@@ -230,7 +230,7 @@ void FixElectrodeBoundaries::pre_exchange(){
       int index = is_particle(coords,etype);
       if (index > 0){ //hack because image charges messes up when excluded atom is index 0
         //attempt reduction
-        fprintf(screen, "attempt reduction on index %d, coords: %.2f,%.2f,%.2f \n", index,coords[0],coords[1],coords[2]);
+        fprintf(screen, "reduction, %.2f,%.2f,%.2f ", index,coords[0],coords[1],coords[2]);
         attempt_reduction(index, side);
       }
     }
@@ -389,18 +389,18 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
     energy_after = energy_full();
     de = energy_after-energy_before;
     double prob = get_transfer_probability(de,side,1);
-    fprintf(screen, "%d %d energy is %f prob is %f \n", side, 1, de, prob);
+    fprintf(screen, "%f, %f ",de, prob);
     if (random_equal->uniform() < prob ){
       energy_stored = energy_after;
       (side)? rightOx++ : leftOx++;
-      fprintf(screen, "oxidized at coord: %.2f %.2f %.2f \n", atom->x[m][0],atom->x[m][1],atom->x[m][2]);
+      fprintf(screen, "1 \n"); // accepted
     }else{  // charge transfer move rejected
       reject = true;
-      fprintf(screen, "charge transfer move rejected \n");
+      fprintf(screen, "0 \n");
     }
   }else{ // insertion move rejected
     reject = true;
-    fprintf(screen, "insertion move rejected \n");
+    fprintf(screen, "-1 -1 0 \n");
   }
 
   if (reject){
@@ -408,7 +408,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
     
     if (neutralIndex == -1) {
       int nlocal = atom->nlocal;
-      fprintf(screen, "%s %d %s %d %s", "not accepted, m is ", m, " nlocal is ",nlocal, "\n");
+      // fprintf(screen, "%s %d %s %d %s", "not accepted, m is ", m, " nlocal is ",nlocal, "\n");
       
       while (m < atom->nlocal-1){
         atom->natoms--;
@@ -449,14 +449,14 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
     de = energy_after-energy_before;
     double prob = get_transfer_probability(de,side,0);
 
-    fprintf(screen, "%d %d energy is %f prob is %f \n", side, 0, de, prob);
+    fprintf(screen, "%f, %f, ", de, prob);
 
     if (random_equal->uniform() < prob) {  // check to see if can remove atom
       ctAccepted = true;
       energy_before = energy_after;  // no charge is new baseline energy
     } else{  // charge transfer move rejected
       ctAccepted = false;
-      fprintf(screen, "charge transfer move rejected \n");
+      fprintf(screen, "0 \n");
       atom->q[i] = q_tmp;
       energy_stored = original_energy;
     }
@@ -482,10 +482,10 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
         if (atom->map_style) atom->map_init();  //what does this do?
         side? rightRed++ : leftRed++;
         energy_stored = energy_after;
-        fprintf(screen, "reduced index: %d \n", i);
+        fprintf(screen, "1 \n");
 
       } else { //not accepted
-        fprintf(screen, "atomic removal move rejected \n");
+        fprintf(screen, "0 \n");
         // reset everything
         atom->mask[i] = tmpmask;
         if (charge_flag) atom->q[i] = q_tmp;

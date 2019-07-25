@@ -404,9 +404,9 @@ void FixImageCharges::pre_force(int vflag){
       int j = imagei[i];
 
       if(j == -1){ // this is an image charge, will get taken care of later or deleted
-        if (x[i][0] > 0){
-          fprintf(screen,"i is %d, j is %d. image charge is in box!!. \n",i,j);
-        }
+        // if (x[i][0] > 0){
+        //   fprintf(screen,"i is %d, j is %d. image charge is in box!!. \n",i,j);
+        // }
         dlist[i] = !dlist[i];
         seenCount++;
       }else{
@@ -416,9 +416,9 @@ void FixImageCharges::pre_force(int vflag){
         double delta = 2*(nxvalue/nnorm*pxvalue + nyvalue/nnorm*pyvalue + nzvalue/nnorm*pzvalue);
         double r[3];
         r[0] = x[i][0] - (prefactor-delta)*nxvalue;
-        if (r[0] > 0){
-          fprintf(screen,"i is %d, j is %d. attempting to put image inside box. \n",i,j);
-        }
+        // if (r[0] > 0){
+        //   fprintf(screen,"i is %d, j is %d. attempting to put image inside box. \n",i,j);
+        // }
         r[1] = x[i][1] - (prefactor-delta)*nyvalue;
         r[2] = x[i][2] - (prefactor-delta)*nzvalue;
       

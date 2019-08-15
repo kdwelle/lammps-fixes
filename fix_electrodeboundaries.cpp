@@ -18,10 +18,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
-
-
-#include "fix_electrodeboundaries.h"
-#include "fix.h"
+#include <vector>
 
 #include "atom.h"
 #include "atom_vec.h"
@@ -38,6 +35,9 @@
 #include "random_park.h"
 #include "update.h"
 
+#include "fix_electrodeboundaries.h"
+#include "fix.h"
+
 
 using namespace std;
 using namespace LAMMPS_NS;
@@ -52,7 +52,7 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   dr = 2.0; //plus/minus search for ion in vicinity
   xcut = 0.5; //mean distance from electrode to check for electrochem
   ncycles = 1; //number of attempts per timestep
-  pOxidation = 0.10; //probability of oxidation vs. reduction
+  pOxidation = 0.50; //probability of oxidation vs. reduction
   charge = 1.0;
   charge_flag = true;
   sigma = sqrt(force->boltz/force->mvv2e);
@@ -61,15 +61,15 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   porusLeft = false;
   porusRight = false;
   overpotential = 0;
-
+  occupation = 0;
 
   if (narg < 8) error->all(FLERR,"Illegal fix electrodeboundaries command -- not enough arguments");
 
   // electrodes have to lie along the x-axis
   // Next argument is a distance between electrodes
-  xlo = force->numeric(FLERR,arg[3]);
+  Vxlo = force->numeric(FLERR,arg[3]);
   dist = force->numeric(FLERR,arg[4]);
-  xhi = xlo + dist;
+  Vxhi = Vxlo + dist;
   // Then voltage@defined plane and voltage difference between electrodes
   v0 = force->numeric(FLERR,arg[5]);
   dv = force->numeric(FLERR,arg[6]);
@@ -92,9 +92,12 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
     else if (strcmp(arg[iarg],"ncycles") == 0) { //keyword = ncycles 
       ncycles = force->numeric(FLERR,arg[iarg+1]);
       iarg += 2;
-    }
-    else if (strcmp(arg[iarg],"couple") == 0) { //keyword = intercalation true/false neutralIndex
+    }else if (strcmp(arg[iarg],"couple") == 0) { //keyword = intercalation true/false neutralIndex
       intercalation = false; // if -1 then use no redox couple
+      neutralIndex = force->numeric(FLERR,arg[iarg+1]);
+      iarg += 2;
+    }else if (strcmp(arg[iarg],"intercalation") == 0) { //keyword = intercalation true/false neutralIndex
+      intercalation = true; // if -1 then use no redox couple
       neutralIndex = force->numeric(FLERR,arg[iarg+1]);
       iarg += 2;
     }else if (strcmp(arg[iarg],"porusLeft") == 0){ //keyword = porus ; triggers a porus electrode framework
@@ -107,6 +110,9 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
       iarg += 2;
     }else if (strcmp(arg[iarg],"overpotential") == 0){ //keyword = overpotential ; adds a term to the de before prob. compute
       overpotential = force->numeric(FLERR,arg[iarg+1]);
+      iarg += 2;
+    }else if (strcmp(arg[iarg],"occupation") == 0){ //keyword = occupation ; includes a check against an occuptation lattice
+      occupation = force->numeric(FLERR,arg[iarg+1]);
       iarg += 2;
   	}else error->all(FLERR,"Illegal fix electrodeboundaries command"); // not a recognized keyword
   }
@@ -193,6 +199,26 @@ void FixElectrodeBoundaries::init(){
   int ipe = modify->find_compute(id_pe);
   c_pe = modify->compute[ipe];
 
+  // Build occupation array if needed
+  if (occupation){
+    ylo = domain->boxlo[1];
+    yhi = domain->boxhi[1];
+    zlo = domain->boxlo[2];
+    zhi = domain->boxhi[2];
+    xhi = domain->boxhi[0];
+    xlo = domain->boxlo[0];
+    ny = round((yhi-ylo)*occupation);
+    nx = round((xhi-xlo)*occupation);
+    nz = round((zhi-zlo)*occupation);
+    occ.resize(nx);
+    for (int i=0; i<nx; ++i){
+      occ[i].resize(ny);
+      for (int j=0; j<ny; ++j){
+        occ[i][j].resize(nz,false); //all start at false
+      }
+    }
+
+  }
 }
 
 void FixElectrodeBoundaries::pre_exchange(){
@@ -216,7 +242,7 @@ void FixElectrodeBoundaries::pre_exchange(){
   }
 
   for (int i=0; i<numRepeat; ++i){
-    
+    int index;
     int side = (random_equal->uniform() > 0.5);
     // left = 0, right = 1;
     coords[0] = get_x(side);
@@ -226,16 +252,34 @@ void FixElectrodeBoundaries::pre_exchange(){
     //random chance for reduction vs oxidation
     if (random_equal->uniform() < pOxidation){
       //oxidation
-      fprintf(screen, "oxidation, %.2f,%.2f,%.2f ",coords[0],coords[1],coords[2]);
-      attempt_oxidation(coords, side);
+      fprintf(screen, "oxidation %.2f %.2f %.2f ",coords[0],coords[1],coords[2]); 
+      if (porus_side(side)){ //checks if this side is porus and if occupancy is turned on
+        if (is_occupied(coords)){
+          attempt_oxidation(coords, side);
+        }else{ 
+          fprintf(screen, "-1 -1 0 \n");
+        }
+      }else{
+        attempt_oxidation(coords, side);
+      }
     
     }else{
       //reduction
-      int index = is_particle(coords,etype);
+      fprintf(screen, "reduction ");
+      if (porus_side(side)){
+        if (!is_occupied(coords)){ //have to reduce to an empty site
+          index = is_particle(coords,etype);
+        }else{
+          index = -1;
+        }
+      }else{ // no need to worry about occ
+        index = is_particle(coords,etype);
+      }
       if (index > 0){ //hack because image charges messes up when excluded atom is index 0
         //attempt reduction
-        fprintf(screen, "reduction, %.2f,%.2f,%.2f ", index,coords[0],coords[1],coords[2]);
         attempt_reduction(index, side);
+      }else{
+        fprintf(screen, "-1 -1 -1 -1 -1 0 \n");
       }
     }
   }
@@ -249,18 +293,18 @@ float FixElectrodeBoundaries::get_x(int side){
   // function that determines the x-coordinate of the oxidation/reduction
   if (side){ //right
     if (porusRight){
-      return xstart + ((xhi - xstart)*random_equal->uniform());
+      return xstart + ((Vxhi - xstart)*random_equal->uniform());
     }else{
       float xtemp = -1*xcut*log(random_equal->uniform()); //exponential distribution centered at xcut
-      return xhi - xtemp;
+      return Vxhi - xtemp;
     }
 
   }else{ //left
     if (porusLeft){
-      return xlo + ((xend-xlo)*random_equal->uniform());
+      return Vxlo + ((xend-Vxlo)*random_equal->uniform());
     }else{
       float xtemp = -1*xcut*log(random_equal->uniform()); //exponential distribution centered at xcut
-      return xtemp + xlo;
+      return xtemp + Vxlo;
     }
   }
 
@@ -279,8 +323,8 @@ int FixElectrodeBoundaries::is_particle(double *coords, int typeI){
   double ylen = yhi-ylo;
   double zlen = zhi-zlo;
 
-  float xmin=max(coords[0]-xcut, xlo);
-  float xmax=min(coords[0]+xcut, xhi);
+  float xmin=max(coords[0]-xcut, Vxlo);
+  float xmax=min(coords[0]+xcut, Vxhi);
   float ymin=coords[1]-dr;
   float ymax=coords[1]+dr;
   float zmin=coords[2]-dr;
@@ -309,6 +353,38 @@ int FixElectrodeBoundaries::is_particle(double *coords, int typeI){
   return -1;
 }
 
+bool FixElectrodeBoundaries::is_occupied(double* coords){
+  int x = round((coords[0]-xlo)/occupation);
+  int y = round((coords[1]-ylo)/occupation);
+  int z = round((coords[2]-zlo)/occupation);
+  if(x<0){x += nx; }else if(x>nx){x -= nx; }
+  if(y<0){y += ny; }else if(y>nx){y -= ny; }
+  if(z<0){z += nz; }else if(z>nz){z -= nz; }
+  return occ[x][y][z];
+}
+
+void FixElectrodeBoundaries::set_occupation(double* coords, bool set){
+  int x = round((coords[0]-xlo)/occupation);
+  int y = round((coords[1]-ylo)/occupation);
+  int z = round((coords[2]-zlo)/occupation);
+  if(x<0){x += nx; }else if(x>nx){x -= nx; }
+  if(y<0){y += ny; }else if(y>nx){y -= ny; }
+  if(z<0){z += nz; }else if(z>nz){z -= nz; }
+  occ[x][y][z] = set;
+}
+
+bool FixElectrodeBoundaries::porus_side(int side){
+  //returns true if side is porus AND occ is turned on
+  if (occupation){
+    if (!side && porusLeft){
+      return true;
+    }else if (side && porusRight){
+      return true;
+    }
+  }
+  return false;
+}
+
 void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
 
   side? rightOxAttempts++ : leftOxAttempts++;
@@ -321,8 +397,10 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
   bool reject = false;
   bool found = false;
   int oldmask;
-  double* oldcoords;
+  double oldcoords[3];
 
+  // Step 0: check to see if there is an occupied site to "draw" from
+  
   // Step 1: Check LJ interactions using Boltzmann factors if intercaltion
   if (intercalation) {
     if (neutralIndex == -1){
@@ -364,52 +442,62 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
         atom->q[m] = 0;
         // oldmask = atom->mask[m];
         // atom->mask[m] = groupbit;
-        oldcoords = atom->x[m];
-        atom->x[m] = coord;
+        oldcoords[0] = atom->x[m][0];
+        oldcoords[1] = atom->x[m][1];
+        oldcoords[2] = atom->x[m][2];
+        atom->x[m][0] = coord[0];
+        atom->x[m][1] = coord[1];
+        atom->x[m][2] = coord[2];
+
         // atom->v[m][0] = random_equal->gaussian()*sigma;
         // atom->v[m][1] = random_equal->gaussian()*sigma;
         // atom->v[m][2] = random_equal->gaussian()*sigma;
       } else{
         reject = true;
+        fprintf(screen, "-2 -2 0 \n"); //out of neutral atoms
       }
     }
     energy_after = energy_full();
     de = energy_after-energy_before;
 
-  } else { //search for a redox couple
+  } else { //not intercalation a//search for a redox couple
     m = is_particle(coord,neutralIndex);
     if (m == -1){
       reject = true;
       de = 10000;
+      fprintf(screen, "-3 -3 0 \n"); // couldn't find a couple
     }else{
-      de = 0;
+      de = -10;
     }
   }
 
   // TODO: edit so that uses correct kT for non-lj units!
-  if(de < 0 || exp(-de) > random_equal->uniform()){ //accept, check electrostatics
-    energy_before = energy_after; // Now want to compare charge and no charge
-    if (charge_flag) atom->q[m] = charge;
-    energy_after = energy_full();
-    de = energy_after-energy_before;
-    double prob = get_transfer_probability(de,side,1);
-    fprintf(screen, "%f, %f ",de, prob);
-    if (random_equal->uniform() < prob ){
-      energy_stored = energy_after;
-      (side)? rightOx++ : leftOx++;
-      fprintf(screen, "1 \n"); // accepted
-    }else{  // charge transfer move rejected
+  if(!reject){
+    if(de < 0 || exp(-de) > random_equal->uniform()){ //accept, check electrostatics
+      energy_before = energy_after; // Now want to compare charge and no charge
+      if (charge_flag) atom->q[m] = charge;
+      energy_after = energy_full();
+      de = energy_after-energy_before;
+      double prob = get_transfer_probability(de,side,1);
+      fprintf(screen, "%f %f ",de, prob);
+      if (random_equal->uniform() < prob ){
+        energy_stored = energy_after;
+        (side)? rightOx++ : leftOx++;
+        fprintf(screen, "1 \n"); // accepted
+        if(porus_side(side)){
+          set_occupation(coord,0);
+        }
+      }else{  // charge transfer move rejected
+        reject = true;
+        fprintf(screen, "0 \n");
+      }
+    }else{ // insertion move rejected
       reject = true;
-      fprintf(screen, "0 \n");
+      fprintf(screen, "-1 -1 0 \n"); // insertion move rejected
     }
-  }else{ // insertion move rejected
-    reject = true;
-    fprintf(screen, "-1 -1 0 \n");
   }
 
   if (reject){
-    if (charge_flag) atom->q[m] = 0.0;
-    
     if (neutralIndex == -1) {
       int nlocal = atom->nlocal;
       // fprintf(screen, "%s %d %s %d %s", "not accepted, m is ", m, " nlocal is ",nlocal, "\n");
@@ -423,27 +511,33 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
       atom->nlocal--;
     
     } else if (found){
+      if (charge_flag) atom->q[m] = 0.0;
       // atom->mask[m] = oldmask;
       atom->type[m] = neutralIndex;
-      atom->x[m] = oldcoords;
+      atom->x[m][0] = oldcoords[0];
+      atom->x[m][1] = oldcoords[1];
+      atom->x[m][2] = oldcoords[2];
     }
 
     if (modify->n_pre_force) modify->pre_force(0);
     if (force->kspace) force->kspace->qsum_qsq();
     energy_stored = original_energy;
   }
-
 }
 
 void FixElectrodeBoundaries::attempt_reduction(int i, int side){
   double q_tmp=0;
   bool ctAccepted = false;
 
+  double* coord=atom->x[i];
+  fprintf(screen, "%f %f %f", coord[0],coord[1],coord[2]);
+
   side? rightRedAttempts++ : leftRedAttempts++;
   double energy_before = energy_stored;
   double original_energy = energy_before;
   double energy_after;
   double de;
+  
 
   // First, check electrostatics
   if(charge_flag){
@@ -453,7 +547,7 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
     de = energy_after-energy_before;
     double prob = get_transfer_probability(de,side,0);
 
-    fprintf(screen, "%f, %f, ", de, prob);
+    fprintf(screen, "%f %f ", de, prob);
 
     if (random_equal->uniform() < prob) {  // check to see if can remove atom
       ctAccepted = true;
@@ -487,6 +581,9 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
         side? rightRed++ : leftRed++;
         energy_stored = energy_after;
         fprintf(screen, "1 \n");
+        if (occupation){
+          set_occupation(coord,1);
+        }
 
       } else { //not accepted
         fprintf(screen, "0 \n");
@@ -500,6 +597,9 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
     }else{
       side? rightRed++ : leftRed++;
       remove_atom(i); //no check needed for redox couple, we already checked charge
+      if (occupation){
+        set_occupation(coord,1);
+      }
     }
   }
 }
@@ -604,5 +704,6 @@ double FixElectrodeBoundaries::compute_vector(int n){
     case 6: return rightOxAttempts;
     case 7: return rightRedAttempts;
   }
+  return -1; //something went wrong here
 }
 

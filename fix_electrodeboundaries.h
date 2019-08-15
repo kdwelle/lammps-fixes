@@ -1,3 +1,4 @@
+
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    http://lammps.sandia.gov, Sandia National Laboratories
@@ -24,6 +25,7 @@ FixStyle(electrodeboundaries,FixElectrodeBoundaries)
 #define LMP_FIX_ELECTRODEBOUNDARIES_H
 
 #include "fix.h"
+#include <vector>
 
 namespace LAMMPS_NS {
 
@@ -43,10 +45,11 @@ class FixElectrodeBoundaries : public Fix {
 
 
  protected: 
-  double xlo,xhi,dist,v0,dv,sigma,charge;
-  double ylo,yhi,zlo,zhi;
+  double Vxlo,Vxhi,dist,v0,dv,sigma,charge;
+  double ylo,yhi,zlo,zhi,xlo,xhi;
   bool charge_flag, intercalation, porusLeft,porusRight;
   double energy_stored,ncycles,pOxidation, xstart, xend;
+  double occupation;
   int exclusion_group, neutralIndex;
   int varflag,iregion,etype,seed,overpotential;
   int leftOx, leftOxAttempts;
@@ -61,9 +64,11 @@ class FixElectrodeBoundaries : public Fix {
   int nlevels_respa,ilevel_respa;
   int exclusion_group_bit;
 
-
+  std::vector< std::vector< std::vector<bool> > >  occ; //vector that holds info about site occupation
+  int nx,ny,nz; //lengths of the occ vector
   int maxatom;
   double **sforce;
+
 
   class RanPark *random_equal;
   class Compute *c_pe;
@@ -74,6 +79,9 @@ class FixElectrodeBoundaries : public Fix {
   void attempt_reduction(int, int);
   void remove_atom(int);
   float get_x(int);
+  bool is_occupied(double*);
+  void set_occupation(double*, bool);
+  bool porus_side(int);
 
   float get_transfer_probability(float, int, int);
   double energy_full();

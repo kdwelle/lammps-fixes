@@ -127,6 +127,7 @@ FixImageCharges::FixImageCharges(LAMMPS *lmp, int narg, char **arg) :
   iregion = -1;
   idregion = NULL;
   scale = 1.0;
+  fixedN = false;
 
   int iarg = 10;  //start after madatory arguments
   while (iarg < narg) {
@@ -152,7 +153,7 @@ FixImageCharges::FixImageCharges(LAMMPS *lmp, int narg, char **arg) :
           scalestyle = CONSTANT;
         }
         iarg += 2;
-
+    
     } else error->all(FLERR,"Illegal fix imagecharges command"); // not a recognized keyword
   }
 
@@ -275,6 +276,62 @@ void FixImageCharges::init(){
   // group_bit_all = group->bitmask[temp_ind];
   // std::fprintf(screen, "%s %d %s", "group_bit_all is: ", group_bit_all, "\n");
 
+
+  double **x = atom->x;      //positions
+  double *q = atom->q;
+  int *mask = atom->mask;
+  int nlocal = atom->nlocal;
+  int *type = atom->type;
+
+  //initialize the imagei array
+  for (int i = 0; i < nlocal+2; i++){
+    imagei[i] = -2;
+    imageid[i] = -2;
+  }
+
+
+  //go through and tally total charges + image types 
+  int nactive = 0;
+  int nimage = 0;
+  int ilist[nlocal+2]; //list to use as a mask for image charges
+  for (int i=0; i<nlocal+2; i++){ //initialize
+    ilist[i] = 0;
+  }
+
+  for (int i = 0; i < nlocal; i++){
+    if (mask[i] & groupbit) {
+    	if(type[i] == itype){ //will become image charge
+    		imagei[i] = -1;
+    		imageid[i] = -1;
+    		ilist[i] = 1;    //list of unassigned image charges
+    		nimage += 1;
+    	}else{
+    		nactive += 1;
+    	}
+    }
+  }
+
+  fprintf(screen, "%d atoms of type %d to be images for %d active atoms \n",nimage, itype, nactive );
+
+  //loop through again to assign image charges
+  for (int i = 0; i < nlocal; i++){ 
+    if (mask[i] & groupbit) {
+    	if(type[i] != itype){ //will become image charge
+    		int j;
+    		for (j=0; j<nlocal; j++){
+    			if (ilist[j] == 1){
+    				ilist[j] = 0; //we've used this one
+    				break;
+    			}
+  			}
+  			if (j < nlocal){ //don't need to create new atom
+	  			imagei[i] = j;
+	  			imageid[i] = j;
+  		  }
+  		}
+  	}
+  }
+
 }
 
 void FixImageCharges::min_setup_pre_force(int vflag){
@@ -294,13 +351,6 @@ void FixImageCharges::setup_pre_force(int vflag){
   int nadded = 0;
   int atomIndex = nlocal;
 
-  //initialize
-  for (int i = 0; i < nlocal*4; i++){
-    imagei[i] = -2;
-    imageid[i] = -2;
-  }
-
-
   // update region if necessary
 
   Region *region = NULL;
@@ -310,31 +360,41 @@ void FixImageCharges::setup_pre_force(int vflag){
   }
 
   if (varflag == CONSTANT) {
-    for (int i = 0; i < nlocal; i++)
+    for (int i = 0; i < atom->nlocal; i++)
       if (mask[i] & groupbit) {
         if (region && !region->match(x[i][0],x[i][1],x[i][2])){
           imagei[i] = -3;
           imageid[i] = -3;
           continue;
         }
-        // transform coordinates across plane
-        double nnorm = sqrt(nxvalue*nxvalue + nyvalue*nyvalue + nzvalue*nzvalue);
-        double prefactor = 2*(nxvalue/nnorm*x[i][0] + nyvalue/nnorm*x[i][1] + nzvalue/nnorm*x[i][2]);
-        double delta = 2*(nxvalue/nnorm*pxvalue + nyvalue/nnorm*pyvalue + nzvalue/nnorm*pzvalue);
-        double r[3];
-        r[0] = x[i][0] - (prefactor-delta)*nxvalue;
-        r[1] = x[i][1] - (prefactor-delta)*nyvalue;
-        r[2] = x[i][2] - (prefactor-delta)*nzvalue;
-        //add a new atom
-        nadded++;
-        atom->avec->create_atom(itype,r);
-        atom->q[atomIndex] = -1*scale*q[i];
-        atom->mask[atomIndex] = groupbit;
-        imagei[i] = atomIndex;
-        imageid[i] = atomIndex;
-        imagei[atomIndex] = -1;
-        imageid[atomIndex] = -1;
-        atomIndex++;
+        int j = imagei[i];
+        if (j != -1){
+	        // transform coordinates across plane
+	        double nnorm = sqrt(nxvalue*nxvalue + nyvalue*nyvalue + nzvalue*nzvalue);
+	        double prefactor = 2*(nxvalue/nnorm*x[i][0] + nyvalue/nnorm*x[i][1] + nzvalue/nnorm*x[i][2]);
+	        double delta = 2*(nxvalue/nnorm*pxvalue + nyvalue/nnorm*pyvalue + nzvalue/nnorm*pzvalue);
+	        double r[3];
+	        r[0] = x[i][0] - (prefactor-delta)*nxvalue;
+	        r[1] = x[i][1] - (prefactor-delta)*nyvalue;
+	        r[2] = x[i][2] - (prefactor-delta)*nzvalue;
+	        //add a new atom
+	        if (j==-2){
+		        nadded++;
+		        atom->avec->create_atom(itype,r);
+		        atom->q[atomIndex] = -1*scale*q[i];
+		        atom->mask[atomIndex] = groupbit;
+		        imagei[i] = atomIndex;
+		        imageid[i] = atomIndex;
+		        imagei[atomIndex] = -1;
+		        imageid[atomIndex] = -1;
+		        atomIndex++;
+	        }else{
+	        	atom->x[j][0] = r[0];
+	        	atom->x[j][1] = r[1];
+	        	atom->x[j][2] = r[2];
+	        	atom->q[j] = -1*scale*q[i];
+	        }
+				}
       }
       vector_atom = imageid;
 
@@ -342,6 +402,7 @@ void FixImageCharges::setup_pre_force(int vflag){
   //MPI adding here TODO
   if(nadded){
       atom->natoms += nadded;
+      fprintf(screen,"imageCharges: added %d new atoms \n", nadded);
   if (atom->natoms < 0)
     error->all(FLERR,"Too many total atoms");
   if (atom->tag_enable) atom->tag_extend();
@@ -425,7 +486,7 @@ void FixImageCharges::pre_force(int vflag){
         if(j < 0 || j >= nlocal){ //used to not be in region or is new atom
           // probably won't fail even if j was supposed to be zero
           j=atomIndex;
-          // fprintf(screen,"%s %d %s %d %s", "New atom ", i, " gets image ", j, "\n");
+          fprintf(screen,"%s %d %s %d %s", "New atom ", i, " gets image ", j, "\n");
           atomIndex++;
           nadded++;
           nchanged++;
@@ -450,7 +511,7 @@ void FixImageCharges::pre_force(int vflag){
           }
           //update type if necessary
           if(i == exclusionAtom){
-            // fprintf(screen, "i = %d updated type of image to unexclude: %d \n",i, j);
+            fprintf(screen, "i = %d updated type of image to unexclude: %d \n",i, j);
             atom->mask[j] = groupbit;
             exclusionAtom = -1;
           }
@@ -459,12 +520,12 @@ void FixImageCharges::pre_force(int vflag){
       }
     }else{ //not in group
       int j = imagei[i];
-      // fprintf(screen,"atom %d is not in group, j is %d \n", i, j);
+      fprintf(screen,"atom %d is not in group, j is %d \n", i, j);
       if (j >= 0 ){ //exclusion group atom
-        // fprintf(screen, "excluded: %d , image: %d \n", i, j);
+        fprintf(screen, "excluded: %d , image: %d \n", i, j);
         atom->mask[j] = atom->mask[i]; //set group of image to same as atom
         atom->q[j] = 0.0;                //set charge of image to zero
-        // fprintf(screen, "changed type of atom: %d to exclude \n", j);
+        fprintf(screen, "changed type of atom: %d to exclude \n", j);
         dlist[j] = !dlist[j];
         reqCount++;
         exclusionAtom = i;
@@ -473,7 +534,7 @@ void FixImageCharges::pre_force(int vflag){
         dlist[i] = !dlist[i];
         seenCount++;
         if(i != excludedHere){ //just excluded image charge
-          // fprintf(screen, "unexcluded: %d , image: %d \n", i, imagei[i]);
+          fprintf(screen, "unexcluded: %d , image: %d \n", i, imagei[i]);
           mask[j] = groupbit;
         }
       }else if (j == -2){ //new atom
@@ -487,14 +548,14 @@ void FixImageCharges::pre_force(int vflag){
   nlocal = atom->nlocal;
   // fprintf(screen, "nlocal is %d \n", nlocal);
   // fprintf(screen, "seenCount is %d, reqCount is %d, diff is: \n", seenCount, reqCount);
-  // for (int i=0; i<oldnlocal; i++){
-  //   if (dlist[i]) {
-  //     fprintf(screen,"%d : %d, ", i, imagei[i]);
-  //   }
-  // }
+  for (int i=0; i<oldnlocal; i++){
+    if (dlist[i]) {
+      // fprintf(screen,"%d : %d, ", i, imagei[i]);
+    }
+  }
   // fprintf(screen,"\n");
   if (seenCount > reqCount){
-    // fprintf(screen, "flagging to Delete \n");
+    fprintf(screen, "flagging to Delete \n");
     toDelete = true;
   } else if (seenCount != reqCount){
    error->all(FLERR,"New atom did not get image"); 
@@ -579,39 +640,42 @@ void FixImageCharges::post_force(int vflag){
 void FixImageCharges::post_run(){
   // delete all the image charges created by this fix. This leaves the system in the same state we found it in
   // without this cannot e.g. run for 1000 then change field and run again--will result in duplicate images
-  AtomVec *avec = atom->avec;
-  int *mask = atom->mask;
-  int nlocal = atom->nlocal;
-  bool toDelete = false;
-  int dlist[nlocal]; //list to use as a mask for atoms that need to be deleted
-  //initialize dlist
-  for (int i=0; i<nlocal; i++){ //initialize
-    dlist[i] = 0;
-  }
 
-  //loop over local atoms and find image charges
-  for (int i = 0; i < nlocal; i++){
-    if (mask[i] & groupbit) {
-      if(imagei[i] == -1){
-        dlist[i]=1;
-      }
-    }
-  }
+  // Don't think I need this if it uses existing charges also
+  
+  // AtomVec *avec = atom->avec;
+  // int *mask = atom->mask;
+  // int nlocal = atom->nlocal;
+  // bool toDelete = false;
+  // int dlist[nlocal]; //list to use as a mask for atoms that need to be deleted
+  // //initialize dlist
+  // for (int i=0; i<nlocal; i++){ //initialize
+  //   dlist[i] = 0;
+  // }
 
-  //TODO: add image charges to dlist
+  // //loop over local atoms and find image charges
+  // for (int i = 0; i < nlocal; i++){
+  //   if (mask[i] & groupbit) {
+  //     if(imagei[i] == -1){
+  //       dlist[i]=1;
+  //     }
+  //   }
+  // }
 
-  // delete local atoms flagged in dlist
-  // reset nlocal
-  int i = 0;
-  while (i < nlocal) {
-    if (dlist[i]) {
-      avec->copy(nlocal-1,i,1);
-      dlist[i] = dlist[nlocal-1];
-      nlocal--;
-    } else i++;
-  }
+  // //TODO: add image charges to dlist
+
+  // // delete local atoms flagged in dlist
+  // // reset nlocal
+  // int i = 0;
+  // while (i < nlocal) {
+  //   if (dlist[i]) {
+  //     avec->copy(nlocal-1,i,1);
+  //     dlist[i] = dlist[nlocal-1];
+  //     nlocal--;
+  //   } else i++;
+  // }
     
-  atom->nlocal = nlocal;
+  // atom->nlocal = nlocal;
 }
 
 double FixImageCharges::memory_usage(){
@@ -643,7 +707,7 @@ void FixImageCharges::copy_arrays(int i, int j, int delflag){
       }
     }
     if (!found){
-      // fprintf(screen, "COULDN'T FIND OWNER OF IMAGECHARGE");
+      fprintf(screen, "COULDN'T FIND OWNER OF IMAGECHARGE");
     }
   }
 

@@ -114,7 +114,10 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
     }else if (strcmp(arg[iarg],"occupation") == 0){ //keyword = occupation ; includes a check against an occuptation lattice
       occupation = force->numeric(FLERR,arg[iarg+1]);
       iarg += 2;
-  	}else error->all(FLERR,"Illegal fix electrodeboundaries command"); // not a recognized keyword
+  	}else if (strcmp(arg[iarg],"pOxidation") == 0){ //keyword = occupation ; includes a check against an occuptation lattice
+      pOxidation = force->numeric(FLERR,arg[iarg+1]);
+      iarg += 2;
+    }else error->all(FLERR,"Illegal fix electrodeboundaries command"); // not a recognized keyword
   }
 
   // zero out counters
@@ -243,7 +246,17 @@ void FixElectrodeBoundaries::pre_exchange(){
 
   for (int i=0; i<numRepeat; ++i){
     int index;
-    int side = (random_equal->uniform() > 0.5);
+    int side; // left = 0, right = 1;
+    if (porusLeft == porusRight){ //both porus or neither porus
+    	side = random_equal->uniform() > 0.5; // 50/50
+    }else if (porusRight){
+    	double dx = Vxhi - xstart; // length of porus regime
+    	side = random_equal->uniform() < (dx/(dx+xcut)); //way more likely to ping right
+	}else{ //porusleft is true
+		double dx = xend - Vxlo;
+		side = random_equal->uniform() > (dx/(dx+xcut)); //more likely for left
+	}
+	
     // left = 0, right = 1;
     coords[0] = get_x(side);
     coords[1] = ylo + random_equal->uniform() * (yhi-ylo);

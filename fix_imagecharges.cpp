@@ -127,7 +127,6 @@ FixImageCharges::FixImageCharges(LAMMPS *lmp, int narg, char **arg) :
   iregion = -1;
   idregion = NULL;
   scale = 1.0;
-  fixedN = false;
 
   int iarg = 10;  //start after madatory arguments
   while (iarg < narg) {

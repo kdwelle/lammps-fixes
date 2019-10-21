@@ -47,8 +47,8 @@ FixImageCharges::FixImageCharges(LAMMPS *lmp, int narg, char **arg) :
     if (narg < 10) error->all(FLERR,"Illegal fix imagecharges command -- not enough arguments");
 
     // initialize the array to keep track of image charge associations
-    memory->create(imagei, atom->nmax, "FixImageCharges::imagei");
-    memory->create(imageid, atom->nmax, "FixImageCharges::imagei");
+    memory->create(imagei, atom->nmax+2, "FixImageCharges::imagei");
+    memory->create(imageid, atom->nmax+2, "FixImageCharges::imagei");
 
     // first three arguments define a point on the plane
     if (strstr(arg[3],"v_") == arg[3]) { // if starts with the string v_
@@ -299,14 +299,14 @@ void FixImageCharges::init(){
 
   for (int i = 0; i < nlocal; i++){
     if (mask[i] & groupbit) {
-    	if(type[i] == itype){ //will become image charge
-    		imagei[i] = -1;
-    		imageid[i] = -1;
-    		ilist[i] = 1;    //list of unassigned image charges
-    		nimage += 1;
-    	}else{
-    		nactive += 1;
-    	}
+      if(type[i] == itype){ //will become image charge
+        imagei[i] = -1;
+        imageid[i] = -1;
+        ilist[i] = 1;    //list of unassigned image charges
+        nimage += 1;
+      }else{
+        nactive += 1;
+      }
     }
   }
 
@@ -315,20 +315,20 @@ void FixImageCharges::init(){
   //loop through again to assign image charges
   for (int i = 0; i < nlocal; i++){ 
     if (mask[i] & groupbit) {
-    	if(type[i] != itype){ //will become image charge
-    		int j;
-    		for (j=0; j<nlocal; j++){
-    			if (ilist[j] == 1){
-    				ilist[j] = 0; //we've used this one
-    				break;
-    			}
-  			}
-  			if (j < nlocal){ //don't need to create new atom
-	  			imagei[i] = j;
-	  			imageid[i] = j;
-  		  }
-  		}
-  	}
+      if(type[i] != itype){ //will become image charge
+        int j;
+        for (j=0; j<nlocal; j++){
+          if (ilist[j] == 1){
+            ilist[j] = 0; //mark that we're assigning this charge
+            break;
+          }
+        }
+        if (j < nlocal){ //means we found a match in loop earlier
+          imagei[i] = j;
+          imageid[i] = j;
+        }
+      }
+    }
   }
 
 }
@@ -348,7 +348,7 @@ void FixImageCharges::setup_pre_force(int vflag){
   int nlocal = atom->nlocal;
   int ntypes = atom->ntypes;
   int nadded = 0;
-  int atomIndex = nlocal;
+  int atomIndex = nlocal; //new atoms are added at index nlocal
 
   // update region if necessary
 
@@ -367,33 +367,33 @@ void FixImageCharges::setup_pre_force(int vflag){
           continue;
         }
         int j = imagei[i];
-        if (j != -1){
-	        // transform coordinates across plane
-	        double nnorm = sqrt(nxvalue*nxvalue + nyvalue*nyvalue + nzvalue*nzvalue);
-	        double prefactor = 2*(nxvalue/nnorm*x[i][0] + nyvalue/nnorm*x[i][1] + nzvalue/nnorm*x[i][2]);
-	        double delta = 2*(nxvalue/nnorm*pxvalue + nyvalue/nnorm*pyvalue + nzvalue/nnorm*pzvalue);
-	        double r[3];
-	        r[0] = x[i][0] - (prefactor-delta)*nxvalue;
-	        r[1] = x[i][1] - (prefactor-delta)*nyvalue;
-	        r[2] = x[i][2] - (prefactor-delta)*nzvalue;
-	        //add a new atom
-	        if (j==-2){
-		        nadded++;
-		        atom->avec->create_atom(itype,r);
-		        atom->q[atomIndex] = -1*scale*q[i];
-		        atom->mask[atomIndex] = groupbit;
-		        imagei[i] = atomIndex;
-		        imageid[i] = atomIndex;
-		        imagei[atomIndex] = -1;
-		        imageid[atomIndex] = -1;
-		        atomIndex++;
-	        }else{
-	        	atom->x[j][0] = r[0];
-	        	atom->x[j][1] = r[1];
-	        	atom->x[j][2] = r[2];
-	        	atom->q[j] = -1*scale*q[i];
-	        }
-				}
+        if (j != -1){ //this is not an image charge
+          // transform coordinates across plane
+          double nnorm = sqrt(nxvalue*nxvalue + nyvalue*nyvalue + nzvalue*nzvalue);
+          double prefactor = 2*(nxvalue/nnorm*x[i][0] + nyvalue/nnorm*x[i][1] + nzvalue/nnorm*x[i][2]);
+          double delta = 2*(nxvalue/nnorm*pxvalue + nyvalue/nnorm*pyvalue + nzvalue/nnorm*pzvalue);
+          double r[3];
+          r[0] = x[i][0] - (prefactor-delta)*nxvalue;
+          r[1] = x[i][1] - (prefactor-delta)*nyvalue;
+          r[2] = x[i][2] - (prefactor-delta)*nzvalue;
+          //add a new atom
+          if (j==-2){
+            nadded++;
+            atom->avec->create_atom(itype,r);
+            atom->q[atomIndex] = -1*scale*q[i];
+            atom->mask[atomIndex] = groupbit;
+            imagei[i] = atomIndex;
+            imageid[i] = atomIndex;
+            imagei[atomIndex] = -1;
+            imageid[atomIndex] = -1;
+            atomIndex++;
+          }else{ //j is index of this atom's image
+            atom->x[j][0] = r[0];
+            atom->x[j][1] = r[1];
+            atom->x[j][2] = r[2];
+            atom->q[j] = -1*scale*q[i];
+          }
+        }
       }
       vector_atom = imageid;
 
@@ -483,7 +483,6 @@ void FixImageCharges::pre_force(int vflag){
         r[2] = x[i][2] - (prefactor-delta)*nzvalue;
       
         if(j < 0 || j >= nlocal){ //used to not be in region or is new atom
-          // probably won't fail even if j was supposed to be zero
           j=atomIndex;
           // fprintf(screen,"%s %d %s %d %s", "New atom ", i, " gets image ", j, "\n");
           atomIndex++;

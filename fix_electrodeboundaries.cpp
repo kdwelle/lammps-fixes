@@ -117,6 +117,9 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   	}else if (strcmp(arg[iarg],"pOxidation") == 0){ //keyword = occupation ; includes a check against an occuptation lattice
       pOxidation = force->numeric(FLERR,arg[iarg+1]);
       iarg += 2;
+    }else if (strcmp(arg[iarg],"xcut") == 0){ //keyword = occupation ; includes a check against an occuptation lattice
+      xcut = force->numeric(FLERR,arg[iarg+1]);
+      iarg += 2;
     }else error->all(FLERR,"Illegal fix electrodeboundaries command"); // not a recognized keyword
   }
 

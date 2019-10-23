@@ -122,7 +122,7 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
       xcut = force->numeric(FLERR,arg[iarg+1]);
       iarg += 2;
     }else if (strcmp(arg[iarg],"v0Increment") == 0){ //keyword = v0Increment ; adjusts v0 every redox rxn to maintain electroneutrality
-      xcut = force->numeric(FLERR,arg[iarg+1]);
+      v0Increment = force->numeric(FLERR,arg[iarg+1]);
       iarg += 2;
     }else error->all(FLERR,"Illegal fix electrodeboundaries command"); // not a recognized keyword
   }

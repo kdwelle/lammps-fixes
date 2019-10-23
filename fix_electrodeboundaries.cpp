@@ -507,7 +507,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
         if(porus_side(side)){
           set_occupation(coord,0);
         }
-        v0 += v0Increment; //used to help maintain charge nuetrality (e.g. it's now harder to oxidize than before)
+        v0 -= v0Increment; //used to help maintain charge nuetrality (e.g. it's now harder to oxidize than before)
       }else{  // charge transfer move rejected
         reject = true;
         fprintf(screen, "0 \n");
@@ -620,7 +620,7 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
       if (occupation){
         set_occupation(coord,1);
       }
-      v0 -= v0Increment;
+      v0 += v0Increment;
     }
   }
 }

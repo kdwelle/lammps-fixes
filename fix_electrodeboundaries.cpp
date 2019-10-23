@@ -62,6 +62,7 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
   porusRight = false;
   overpotential = 0;
   occupation = 0;
+  v0Increment = 0.1; //adjusts v0 every redox rxn to maintain electroneutrality
 
   if (narg < 8) error->all(FLERR,"Illegal fix electrodeboundaries command -- not enough arguments");
 
@@ -114,10 +115,13 @@ FixElectrodeBoundaries::FixElectrodeBoundaries(LAMMPS *lmp, int narg, char **arg
     }else if (strcmp(arg[iarg],"occupation") == 0){ //keyword = occupation ; includes a check against an occuptation lattice
       occupation = force->numeric(FLERR,arg[iarg+1]);
       iarg += 2;
-  	}else if (strcmp(arg[iarg],"pOxidation") == 0){ //keyword = occupation ; includes a check against an occuptation lattice
+  	}else if (strcmp(arg[iarg],"pOxidation") == 0){ //keyword = pOxidation ; probability of oxidation instead of reduction attempt
       pOxidation = force->numeric(FLERR,arg[iarg+1]);
       iarg += 2;
-    }else if (strcmp(arg[iarg],"xcut") == 0){ //keyword = occupation ; includes a check against an occuptation lattice
+    }else if (strcmp(arg[iarg],"xcut") == 0){ //keyword = xcut ; mean distance from electrode to check for rxns
+      xcut = force->numeric(FLERR,arg[iarg+1]);
+      iarg += 2;
+    }else if (strcmp(arg[iarg],"v0Increment") == 0){ //keyword = v0Increment ; adjusts v0 every redox rxn to maintain electroneutrality
       xcut = force->numeric(FLERR,arg[iarg+1]);
       iarg += 2;
     }else error->all(FLERR,"Illegal fix electrodeboundaries command"); // not a recognized keyword
@@ -476,14 +480,14 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
     energy_after = energy_full();
     de = energy_after-energy_before;
 
-  } else { //not intercalation a//search for a redox couple
+  } else { //not intercalation so search for a redox couple
     m = is_particle(coord,neutralIndex);
     if (m == -1){
       reject = true;
       de = 10000;
       fprintf(screen, "-3 -3 0 \n"); // couldn't find a couple
     }else{
-      de = -10;
+      de = -10; //placeholder for "yes should continue to check charge transfer"
     }
   }
 
@@ -503,6 +507,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
         if(porus_side(side)){
           set_occupation(coord,0);
         }
+        v0 += v0Increment; //used to help maintain charge nuetrality (e.g. it's now harder to oxidize than before)
       }else{  // charge transfer move rejected
         reject = true;
         fprintf(screen, "0 \n");
@@ -543,7 +548,8 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
 
 void FixElectrodeBoundaries::attempt_reduction(int i, int side){
   double q_tmp=0;
-  bool ctAccepted = false;
+  bool ctAccepted = false; //charge transfer
+  bool srAccepted = false; //short range interactions
 
   double* coord=atom->x[i];
   fprintf(screen, "%f %f %f", coord[0],coord[1],coord[2]);
@@ -591,16 +597,10 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
 
       // TODO: edit so that uses correct kT for non-lj units!
       if(de < 0 || exp(-de) > random_equal->uniform()){ //accept boltzmann and move
+        srAccepted = true;
         atom->mask[i] = tmpmask;
-        remove_atom(i);
         if (atom->map_style) atom->map_init();  //what does this do?
-        side? rightRed++ : leftRed++;
         energy_stored = energy_after;
-        fprintf(screen, "1 \n");
-        if (occupation){
-          set_occupation(coord,1);
-        }
-
       } else { //not accepted
         fprintf(screen, "0 \n");
         // reset everything
@@ -611,11 +611,16 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
         energy_stored = original_energy;
       }
     }else{
+      srAccepted = true; //no check needed for redox couple, we already checked charge
+    }
+    if(srAccepted){ //do all the stuff since we accepted a reduction (ct and sr accepted)
       side? rightRed++ : leftRed++;
-      remove_atom(i); //no check needed for redox couple, we already checked charge
+      remove_atom(i); 
+      fprintf(screen, "1 \n");
       if (occupation){
         set_occupation(coord,1);
       }
+      v0 -= v0Increment;
     }
   }
 }

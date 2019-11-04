@@ -272,12 +272,12 @@ void FixElectrodeBoundaries::pre_exchange(){
     //random chance for reduction vs oxidation
     if (random_equal->uniform() < pOxidation){
       //oxidation
-      fprintf(screen, "oxidation %.2f %.2f %.2f ",coords[0],coords[1],coords[2]); 
+       
       if (porus_side(side)){ //checks if this side is porus and if occupancy is turned on
         if (is_occupied(coords)){
           attempt_oxidation(coords, side);
         }else{ 
-          fprintf(screen, "-1 -1 0 \n");
+          // fprintf(screen, "-1 -1 -1 0 \n");
         }
       }else{
         attempt_oxidation(coords, side);
@@ -285,7 +285,7 @@ void FixElectrodeBoundaries::pre_exchange(){
     
     }else{
       //reduction
-      fprintf(screen, "reduction ");
+      
       if (porus_side(side)){
         if (!is_occupied(coords)){ //have to reduce to an empty site
           index = is_particle(coords,etype);
@@ -297,9 +297,10 @@ void FixElectrodeBoundaries::pre_exchange(){
       }
       if (index > 0){ //hack because image charges messes up when excluded atom is index 0
         //attempt reduction
+        fprintf(screen, "reduction ");
         attempt_reduction(index, side);
       }else{
-        fprintf(screen, "-1 -1 -1 -1 -1 0 \n");
+        // fprintf(screen, "-1 -1 -1 -1 -1 -1 0 \n");
       }
     }
   }
@@ -474,7 +475,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
         // atom->v[m][2] = random_equal->gaussian()*sigma;
       } else{
         reject = true;
-        fprintf(screen, "-2 -2 0 \n"); //out of neutral atoms
+        // fprintf(screen, "-2 -2 0 \n"); //out of neutral atoms
       }
     }
     energy_after = energy_full();
@@ -485,7 +486,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
     if (m == -1){
       reject = true;
       de = 10000;
-      fprintf(screen, "-3 -3 0 \n"); // couldn't find a couple
+      // fprintf(screen, "-1 -3 -3 0 \n"); // couldn't find a couple
     }else{
       de = -10; //placeholder for "yes should continue to check charge transfer"
     }
@@ -499,7 +500,8 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
       energy_after = energy_full();
       de = energy_after-energy_before;
       double prob = get_transfer_probability(de,side,1);
-      fprintf(screen, "%f %f ",de, prob);
+      fprintf(screen, "oxidation %.2f %.2f %.2f ",coord[0],coord[1],coord[2]);
+      fprintf(screen, "%d %f %f ",m, de, prob);
       if (random_equal->uniform() < prob ){
         energy_stored = energy_after;
         (side)? rightOx++ : leftOx++;
@@ -514,7 +516,7 @@ void FixElectrodeBoundaries::attempt_oxidation(double *coord, int side){
       }
     }else{ // insertion move rejected
       reject = true;
-      fprintf(screen, "-1 -1 0 \n"); // insertion move rejected
+      // fprintf(screen, "-1 -1 -1 0 \n"); // insertion move rejected
     }
   }
 
@@ -552,7 +554,7 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
   bool srAccepted = false; //short range interactions
 
   double* coord=atom->x[i];
-  fprintf(screen, "%f %f %f", coord[0],coord[1],coord[2]);
+  fprintf(screen, "%f %f %f ", coord[0],coord[1],coord[2]);
 
   side? rightRedAttempts++ : leftRedAttempts++;
   double energy_before = energy_stored;
@@ -569,7 +571,7 @@ void FixElectrodeBoundaries::attempt_reduction(int i, int side){
     de = energy_after-energy_before;
     double prob = get_transfer_probability(de,side,0);
 
-    fprintf(screen, "%f %f ", de, prob);
+    fprintf(screen, "%d %f %f ", i, de, prob);
 
     if (random_equal->uniform() < prob) {  // check to see if can remove atom
       ctAccepted = true;

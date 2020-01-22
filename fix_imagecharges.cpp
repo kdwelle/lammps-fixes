@@ -605,8 +605,9 @@ void FixImageCharges::min_post_force(int vflag){
 }
 
 void FixImageCharges::post_force(int vflag){
-  double **x = atom->x;
+  // double **x = atom->x;
   double **f = atom->f;
+  double **v = atom->v;
   int *mask = atom->mask;
   int nlocal = atom->nlocal;
 
@@ -625,9 +626,12 @@ void FixImageCharges::post_force(int vflag){
         // if (region && !region->match(x[i][0],x[i][1],x[i][2])) continue;
         // check whether this is an image charge
         if (imagei[i] == -1){
-          f[i][0] = 0; //if so zero forces
+          f[i][0] = 0; //if so zero forces and velocities
           f[i][1] = 0;
           f[i][2] = 0;
+          v[i][0] = 0;
+          v[i][1] = 0;
+          v[i][2] = 0;
         }
       // }
     }

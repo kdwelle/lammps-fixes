@@ -49,3 +49,5 @@ _fix ID group-ID electrodeboundaries xlo dist v0 dv etype seed keyword value..._
 - occupation = spacing
   - Use this keyword to add an occupation matrix which will not let an intercalation occur in the same spot twice without a deintercalation. 
   - spacing = distance between occupation sites, i.e. lattice spacing for the occupation matrix
+- v0Increment = float
+ - This is the amount by which v0 is changed for each electron tranfer. Higher values will punish deviations from nuetrality more severely. A negative value will lead to an unstable system with runaway charge buildup.
